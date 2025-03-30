@@ -8,7 +8,6 @@ import {
   Search, 
   Video,
   Download,
-  Share,
   EyeIcon
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,6 +23,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Resource {
   id: string;
@@ -35,6 +37,7 @@ interface Resource {
   course: string;
   size?: string;
   estimatedTime?: string;
+  url?: string;
 }
 
 const resources: Resource[] = [
@@ -47,7 +50,8 @@ const resources: Resource[] = [
     date: "March 10, 2023",
     course: "Data Science Fundamentals",
     size: "4.2 MB",
-    estimatedTime: "45m"
+    estimatedTime: "45m",
+    url: "https://arxiv.org/pdf/1803.08823.pdf"
   },
   {
     id: "r2",
@@ -58,7 +62,8 @@ const resources: Resource[] = [
     date: "February 22, 2023",
     course: "Advanced React",
     size: "856 MB",
-    estimatedTime: "1h 20m"
+    estimatedTime: "1h 20m",
+    url: "https://www.youtube.com/watch?v=TNhaISOUy6Q"
   },
   {
     id: "r3",
@@ -69,7 +74,8 @@ const resources: Resource[] = [
     date: "March 5, 2023",
     course: "Data Science Fundamentals",
     size: "2.8 MB",
-    estimatedTime: "30m"
+    estimatedTime: "30m",
+    url: "https://www.mathworks.com/help/pdf_doc/stats/stats.pdf"
   },
   {
     id: "r4",
@@ -80,7 +86,8 @@ const resources: Resource[] = [
     date: "January 15, 2023",
     course: "Research Methods",
     size: "1.2 MB",
-    estimatedTime: "2h"
+    estimatedTime: "2h",
+    url: "https://arxiv.org/abs/1912.01703"
   },
   {
     id: "r5",
@@ -90,7 +97,8 @@ const resources: Resource[] = [
     author: "Web Dev Team",
     date: "March 1, 2023",
     course: "Web Development",
-    estimatedTime: "15m"
+    estimatedTime: "15m",
+    url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript"
   },
   {
     id: "r6",
@@ -101,7 +109,8 @@ const resources: Resource[] = [
     date: "March 12, 2023",
     course: "Data Science Fundamentals",
     size: "3.1 MB",
-    estimatedTime: "25m"
+    estimatedTime: "25m",
+    url: "https://www.kaggle.com/datasets"
   }
 ];
 
@@ -142,64 +151,143 @@ const getTypeLabel = (type: Resource["type"]) => {
   }
 };
 
-const ResourceItem = ({ resource }: { resource: Resource }) => (
-  <Card className="hover:shadow-md transition-shadow">
-    <CardContent className="p-5">
-      <div className="flex">
-        <div className="mr-5 p-2 bg-primary-50 rounded-lg">
-          {getIconForType(resource.type)}
-        </div>
-        <div className="flex-1">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="font-semibold text-lg">{resource.title}</h3>
-              <p className="text-sm text-muted-foreground mt-1 mb-3">{resource.description}</p>
+const ResourceItem = ({ resource }: { resource: Resource }) => {
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const { toast } = useToast();
+
+  const handleView = () => {
+    if (resource.url) {
+      if (resource.type === "video" || resource.type === "link") {
+        window.open(resource.url, "_blank");
+      } else {
+        setViewDialogOpen(true);
+      }
+    } else {
+      toast({
+        title: "Resource unavailable",
+        description: "This resource cannot be viewed at the moment.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownload = () => {
+    if (resource.url) {
+      // Create a temporary anchor element to trigger download
+      const link = document.createElement("a");
+      link.href = resource.url;
+      link.download = resource.title;
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "Download started",
+        description: `Downloading ${resource.title}`,
+      });
+    } else {
+      toast({
+        title: "Download unavailable",
+        description: "This resource cannot be downloaded at the moment.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <>
+      <Card className="hover:shadow-md transition-shadow">
+        <CardContent className="p-5">
+          <div className="flex">
+            <div className="mr-5 p-2 bg-primary-50 rounded-lg">
+              {getIconForType(resource.type)}
             </div>
-            <Badge variant="outline" className="ml-2 shrink-0">
-              {getTypeLabel(resource.type)}
-            </Badge>
-          </div>
-          
-          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground mb-3">
-            <div>
-              <span className="font-medium">Author:</span> {resource.author}
-            </div>
-            <div>
-              <span className="font-medium">Added:</span> {resource.date}
-            </div>
-            <div>
-              <span className="font-medium">Course:</span> {resource.course}
-            </div>
-            {resource.size && (
-              <div>
-                <span className="font-medium">Size:</span> {resource.size}
+            <div className="flex-1">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-semibold text-lg">{resource.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-1 mb-3">{resource.description}</p>
+                </div>
+                <Badge variant="outline" className="ml-2 shrink-0">
+                  {getTypeLabel(resource.type)}
+                </Badge>
               </div>
-            )}
-            {resource.estimatedTime && (
-              <div>
-                <span className="font-medium">Est. Time:</span> {resource.estimatedTime}
+              
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground mb-3">
+                <div>
+                  <span className="font-medium">Author:</span> {resource.author}
+                </div>
+                <div>
+                  <span className="font-medium">Added:</span> {resource.date}
+                </div>
+                <div>
+                  <span className="font-medium">Course:</span> {resource.course}
+                </div>
+                {resource.size && (
+                  <div>
+                    <span className="font-medium">Size:</span> {resource.size}
+                  </div>
+                )}
+                {resource.estimatedTime && (
+                  <div>
+                    <span className="font-medium">Est. Time:</span> {resource.estimatedTime}
+                  </div>
+                )}
               </div>
+              
+              <div className="flex gap-2">
+                <Button size="sm" variant="default" onClick={handleView}>
+                  <EyeIcon className="h-4 w-4 mr-1" /> View
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleDownload}>
+                  <Download className="h-4 w-4 mr-1" /> Download
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="max-w-4xl h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>{resource.title}</DialogTitle>
+          </DialogHeader>
+          <div className="h-full w-full overflow-auto">
+            {resource.url && (
+              <iframe
+                src={resource.url}
+                className="w-full h-full"
+                title={resource.title}
+                sandbox="allow-scripts allow-same-origin"
+              />
             )}
           </div>
-          
-          <div className="flex gap-2">
-            <Button size="sm" variant="default">
-              <EyeIcon className="h-4 w-4 mr-1" /> View
-            </Button>
-            <Button size="sm" variant="outline">
-              <Download className="h-4 w-4 mr-1" /> Download
-            </Button>
-            <Button size="sm" variant="outline">
-              <Share className="h-4 w-4 mr-1" /> Share
-            </Button>
-          </div>
-        </div>
-      </div>
-    </CardContent>
-  </Card>
-);
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};
 
 const Resources = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState("all");
+
+  const filteredResources = resources.filter((resource) => {
+    const matchesSearch = resource.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         resource.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         resource.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         resource.course.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (activeTab === "all") return matchesSearch;
+    if (activeTab === "documents") return matchesSearch && ["pdf", "doc", "bibtex", "excel"].includes(resource.type);
+    if (activeTab === "videos") return matchesSearch && resource.type === "video";
+    if (activeTab === "links") return matchesSearch && resource.type === "link";
+    
+    return matchesSearch;
+  });
+
   return (
     <MainLayout>
       <div className="animate-fade-in">
@@ -211,7 +299,12 @@ const Resources = () => {
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input placeholder="Search resources..." className="pl-9" />
+            <Input 
+              placeholder="Search resources..." 
+              className="pl-9" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -233,7 +326,7 @@ const Resources = () => {
           </Button>
         </div>
         
-        <Tabs defaultValue="all" className="mb-6">
+        <Tabs defaultValue="all" className="mb-6" value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -243,42 +336,49 @@ const Resources = () => {
           
           <TabsContent value="all" className="mt-6">
             <div className="space-y-4">
-              {resources.map(resource => (
-                <ResourceItem key={resource.id} resource={resource} />
-              ))}
+              {filteredResources.length > 0 ? (
+                filteredResources.map(resource => (
+                  <ResourceItem key={resource.id} resource={resource} />
+                ))
+              ) : (
+                <p className="text-center py-8 text-muted-foreground">No resources found matching your search criteria.</p>
+              )}
             </div>
           </TabsContent>
           
           <TabsContent value="documents" className="mt-6">
             <div className="space-y-4">
-              {resources
-                .filter(r => ["pdf", "doc", "bibtex", "excel"].includes(r.type))
-                .map(resource => (
+              {filteredResources.length > 0 ? (
+                filteredResources.map(resource => (
                   <ResourceItem key={resource.id} resource={resource} />
                 ))
-              }
+              ) : (
+                <p className="text-center py-8 text-muted-foreground">No document resources found matching your search criteria.</p>
+              )}
             </div>
           </TabsContent>
           
           <TabsContent value="videos" className="mt-6">
             <div className="space-y-4">
-              {resources
-                .filter(r => r.type === "video")
-                .map(resource => (
+              {filteredResources.length > 0 ? (
+                filteredResources.map(resource => (
                   <ResourceItem key={resource.id} resource={resource} />
                 ))
-              }
+              ) : (
+                <p className="text-center py-8 text-muted-foreground">No video resources found matching your search criteria.</p>
+              )}
             </div>
           </TabsContent>
           
           <TabsContent value="links" className="mt-6">
             <div className="space-y-4">
-              {resources
-                .filter(r => r.type === "link")
-                .map(resource => (
+              {filteredResources.length > 0 ? (
+                filteredResources.map(resource => (
                   <ResourceItem key={resource.id} resource={resource} />
                 ))
-              }
+              ) : (
+                <p className="text-center py-8 text-muted-foreground">No link resources found matching your search criteria.</p>
+              )}
             </div>
           </TabsContent>
         </Tabs>
@@ -288,3 +388,4 @@ const Resources = () => {
 };
 
 export default Resources;
+
