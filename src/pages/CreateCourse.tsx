@@ -1,4 +1,5 @@
-
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { 
   Card, 
@@ -24,7 +25,6 @@ import {
   Draggable,
   DropResult,
 } from "react-beautiful-dnd";
-import { useState } from "react";
 import { 
   Grip, 
   Plus, 
@@ -42,23 +42,19 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-
-interface Module {
-  id: string;
-  title: string;
-  description: string;
-  lessons: Lesson[];
-}
-
-interface Lesson {
-  id: string;
-  title: string;
-  type: "video" | "quiz" | "reading" | "assignment";
-  estimatedTime: string;
-  content?: string;
-}
+import { useToast } from "@/hooks/use-toast";
+import { useCoursesStore, Module, Lesson } from "@/store/coursesStore";
 
 const CreateCourse = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const addCourse = useCoursesStore(state => state.addCourse);
+  
+  const [courseTitle, setCourseTitle] = useState("");
+  const [courseDescription, setCourseDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [difficulty, setDifficulty] = useState("");
+  
   const [modules, setModules] = useState<Module[]>([
     {
       id: "module-1",
@@ -180,7 +176,6 @@ const CreateCourse = () => {
       return;
     }
     
-    // Moving lessons within the same module or between modules
     const sourceModuleId = source.droppableId;
     const destModuleId = destination.droppableId;
     
@@ -190,7 +185,6 @@ const CreateCourse = () => {
     if (!sourceModule || !destModule) return;
     
     if (sourceModuleId === destModuleId) {
-      // Moving within the same module
       const newLessons = Array.from(sourceModule.lessons);
       const [removed] = newLessons.splice(source.index, 1);
       newLessons.splice(destination.index, 0, removed);
@@ -204,7 +198,6 @@ const CreateCourse = () => {
       
       setModules(newModules);
     } else {
-      // Moving between different modules
       const sourceModuleLessons = Array.from(sourceModule.lessons);
       const [removed] = sourceModuleLessons.splice(source.index, 1);
       
@@ -240,6 +233,81 @@ const CreateCourse = () => {
     }
   };
   
+  const handleSaveAsDraft = () => {
+    if (!courseTitle) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide a course title",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const courseId = addCourse({
+      title: courseTitle,
+      description: courseDescription,
+      category: category || "Uncategorized",
+      difficulty: difficulty || "beginner",
+      instructor: "Jane Doe",
+      modules,
+      thumbnail: "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
+    });
+    
+    toast({
+      title: "Success!",
+      description: "Course saved as draft"
+    });
+    
+    navigate("/courses");
+  };
+  
+  const handlePublish = () => {
+    if (!courseTitle || !courseDescription || !category || !difficulty) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill out all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (modules.length === 0) {
+      toast({
+        title: "No Modules",
+        description: "Your course needs at least one module",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const emptyModules = modules.filter(module => module.lessons.length === 0);
+    if (emptyModules.length > 0) {
+      toast({
+        title: "Empty Modules",
+        description: `${emptyModules.length} module(s) have no lessons`,
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const courseId = addCourse({
+      title: courseTitle,
+      description: courseDescription,
+      category,
+      difficulty,
+      instructor: "Jane Doe",
+      modules,
+      thumbnail: "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
+    });
+    
+    toast({
+      title: "Success!",
+      description: "Course published successfully"
+    });
+    
+    navigate("/courses");
+  };
+  
   return (
     <MainLayout>
       <div className="animate-fade-in">
@@ -258,19 +326,25 @@ const CreateCourse = () => {
               <CardContent className="space-y-4">
                 <div>
                   <Label htmlFor="course-title">Course Title</Label>
-                  <Input id="course-title" placeholder="Enter course title" className="mt-1" />
+                  <Input 
+                    id="course-title" 
+                    placeholder="Enter course title" 
+                    className="mt-1" 
+                    value={courseTitle}
+                    onChange={(e) => setCourseTitle(e.target.value)}
+                  />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="category">Category</Label>
-                    <Select>
+                    <Select value={category} onValueChange={setCategory}>
                       <SelectTrigger id="category" className="mt-1">
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="data-science">Data Science</SelectItem>
-                        <SelectItem value="web-dev">Web Development</SelectItem>
+                        <SelectItem value="web-development">Web Development</SelectItem>
                         <SelectItem value="design">Design</SelectItem>
                         <SelectItem value="business">Business</SelectItem>
                       </SelectContent>
@@ -279,7 +353,7 @@ const CreateCourse = () => {
                   
                   <div>
                     <Label htmlFor="difficulty">Difficulty Level</Label>
-                    <Select>
+                    <Select value={difficulty} onValueChange={setDifficulty}>
                       <SelectTrigger id="difficulty" className="mt-1">
                         <SelectValue placeholder="Select level" />
                       </SelectTrigger>
@@ -299,6 +373,8 @@ const CreateCourse = () => {
                     placeholder="Enter course description" 
                     className="mt-1"
                     rows={4}
+                    value={courseDescription}
+                    onChange={(e) => setCourseDescription(e.target.value)}
                   />
                 </div>
                 
@@ -504,8 +580,8 @@ const CreateCourse = () => {
             </Card>
             
             <div className="flex justify-end gap-3">
-              <Button variant="outline">Save as Draft</Button>
-              <Button>Publish Course</Button>
+              <Button variant="outline" onClick={handleSaveAsDraft}>Save as Draft</Button>
+              <Button onClick={handlePublish}>Publish Course</Button>
             </div>
           </div>
           
