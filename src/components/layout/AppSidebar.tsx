@@ -107,7 +107,11 @@ export function AppSidebar() {
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <Link to={item.url} className="flex items-center gap-3">
+                    <Link 
+                      to={item.url} 
+                      className="flex items-center gap-3"
+                      // Remove onClick that was causing role to switch
+                    >
                       <item.icon className="h-5 w-5" />
                       <span>{item.title}</span>
                     </Link>

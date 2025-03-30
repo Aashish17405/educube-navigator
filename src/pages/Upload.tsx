@@ -1,4 +1,5 @@
 
+import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { 
   Card, 
@@ -20,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { 
   FileUp, 
-  Link, 
   Plus, 
   Trash2,
   BookOpen,
@@ -33,10 +33,20 @@ import {
   TabsList, 
   TabsTrigger 
 } from "@/components/ui/tabs";
-import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 const Upload = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [resourceTitle, setResourceTitle] = useState("");
+  const [resourceDescription, setResourceDescription] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const [estimatedTime, setEstimatedTime] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [citationContent, setCitationContent] = useState("");
+  const [activeTab, setActiveTab] = useState("file");
   
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -49,6 +59,56 @@ const Upload = () => {
     setUploadedFiles(uploadedFiles.filter((_, i) => i !== index));
   };
   
+  const handleSubmit = () => {
+    // Validate based on active tab
+    if (activeTab === "file") {
+      if (!resourceTitle || !selectedCourse || uploadedFiles.length === 0) {
+        toast({
+          title: "Missing Information",
+          description: "Please provide a title, select a course, and upload at least one file",
+          variant: "destructive"
+        });
+        return;
+      }
+    } else if (activeTab === "link") {
+      if (!resourceTitle || !selectedCourse || !linkUrl) {
+        toast({
+          title: "Missing Information",
+          description: "Please provide a title, select a course, and enter a URL",
+          variant: "destructive"
+        });
+        return;
+      }
+    } else if (activeTab === "citation") {
+      if (!resourceTitle || !selectedCourse || !citationContent) {
+        toast({
+          title: "Missing Information",
+          description: "Please provide a title, select a course, and enter citation content",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
+    // Success toast and redirect
+    toast({
+      title: "Success!",
+      description: `Resource ${resourceTitle} has been uploaded successfully`,
+    });
+    
+    // Clear form
+    setResourceTitle("");
+    setResourceDescription("");
+    setSelectedCourse("");
+    setEstimatedTime("");
+    setUploadedFiles([]);
+    setLinkUrl("");
+    setCitationContent("");
+    
+    // Navigate to resources page
+    navigate("/resources");
+  };
+
   return (
     <MainLayout>
       <div className="animate-fade-in">
@@ -65,7 +125,7 @@ const Upload = () => {
                 <CardDescription>Add files, links, or citations to your courses</CardDescription>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="file">
+                <Tabs defaultValue="file" value={activeTab} onValueChange={setActiveTab}>
                   <TabsList className="grid w-full grid-cols-3 mb-6">
                     <TabsTrigger value="file">File Upload</TabsTrigger>
                     <TabsTrigger value="link">External Link</TabsTrigger>
@@ -77,18 +137,30 @@ const Upload = () => {
                       <div className="grid gap-4">
                         <div>
                           <Label htmlFor="title">Title</Label>
-                          <Input id="title" placeholder="Enter resource title" className="mt-1" />
+                          <Input 
+                            id="title" 
+                            placeholder="Enter resource title"
+                            className="mt-1"
+                            value={resourceTitle}
+                            onChange={(e) => setResourceTitle(e.target.value)}
+                          />
                         </div>
                         
                         <div>
                           <Label htmlFor="description">Description</Label>
-                          <Textarea id="description" placeholder="Enter a brief description" className="mt-1" />
+                          <Textarea 
+                            id="description" 
+                            placeholder="Enter a brief description"
+                            className="mt-1"
+                            value={resourceDescription}
+                            onChange={(e) => setResourceDescription(e.target.value)}
+                          />
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label htmlFor="course">Course</Label>
-                            <Select>
+                            <Select value={selectedCourse} onValueChange={setSelectedCourse}>
                               <SelectTrigger id="course" className="mt-1">
                                 <SelectValue placeholder="Select course" />
                               </SelectTrigger>
@@ -104,7 +176,13 @@ const Upload = () => {
                           <div>
                             <Label htmlFor="estimated-time">Estimated Time</Label>
                             <div className="flex mt-1">
-                              <Input id="estimated-time" type="number" placeholder="Minutes" />
+                              <Input 
+                                id="estimated-time" 
+                                type="number" 
+                                placeholder="Minutes" 
+                                value={estimatedTime}
+                                onChange={(e) => setEstimatedTime(e.target.value)}
+                              />
                               <div className="ml-2 px-3 bg-primary-50 flex items-center rounded-md">
                                 <span className="text-sm text-primary-700">minutes</span>
                               </div>
@@ -158,7 +236,7 @@ const Upload = () => {
                           </div>
                         )}
                         
-                        <Button className="mt-2 w-full">Upload Resources</Button>
+                        <Button className="mt-2 w-full" onClick={handleSubmit}>Upload Resources</Button>
                       </div>
                     </div>
                   </TabsContent>
@@ -167,23 +245,41 @@ const Upload = () => {
                     <div className="space-y-6">
                       <div>
                         <Label htmlFor="link-title">Title</Label>
-                        <Input id="link-title" placeholder="Enter resource title" className="mt-1" />
+                        <Input 
+                          id="link-title" 
+                          placeholder="Enter resource title" 
+                          className="mt-1"
+                          value={resourceTitle}
+                          onChange={(e) => setResourceTitle(e.target.value)}
+                        />
                       </div>
                       
                       <div>
                         <Label htmlFor="link-url">URL</Label>
-                        <Input id="link-url" placeholder="https://example.com" className="mt-1" />
+                        <Input 
+                          id="link-url" 
+                          placeholder="https://example.com" 
+                          className="mt-1"
+                          value={linkUrl}
+                          onChange={(e) => setLinkUrl(e.target.value)}
+                        />
                       </div>
                       
                       <div>
                         <Label htmlFor="link-description">Description</Label>
-                        <Textarea id="link-description" placeholder="Enter a brief description" className="mt-1" />
+                        <Textarea 
+                          id="link-description" 
+                          placeholder="Enter a brief description" 
+                          className="mt-1"
+                          value={resourceDescription}
+                          onChange={(e) => setResourceDescription(e.target.value)}
+                        />
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label htmlFor="link-course">Course</Label>
-                          <Select>
+                          <Select value={selectedCourse} onValueChange={setSelectedCourse}>
                             <SelectTrigger id="link-course" className="mt-1">
                               <SelectValue placeholder="Select course" />
                             </SelectTrigger>
@@ -199,7 +295,13 @@ const Upload = () => {
                         <div>
                           <Label htmlFor="link-estimated-time">Estimated Time</Label>
                           <div className="flex mt-1">
-                            <Input id="link-estimated-time" type="number" placeholder="Minutes" />
+                            <Input 
+                              id="link-estimated-time" 
+                              type="number" 
+                              placeholder="Minutes"
+                              value={estimatedTime}
+                              onChange={(e) => setEstimatedTime(e.target.value)}
+                            />
                             <div className="ml-2 px-3 bg-primary-50 flex items-center rounded-md">
                               <span className="text-sm text-primary-700">minutes</span>
                             </div>
@@ -207,7 +309,7 @@ const Upload = () => {
                         </div>
                       </div>
                       
-                      <Button className="w-full">Add Link Resource</Button>
+                      <Button className="w-full" onClick={handleSubmit}>Add Link Resource</Button>
                     </div>
                   </TabsContent>
                   
@@ -215,7 +317,13 @@ const Upload = () => {
                     <div className="space-y-6">
                       <div>
                         <Label htmlFor="bibtex-title">Title</Label>
-                        <Input id="bibtex-title" placeholder="Enter citation title" className="mt-1" />
+                        <Input 
+                          id="bibtex-title" 
+                          placeholder="Enter citation title" 
+                          className="mt-1"
+                          value={resourceTitle}
+                          onChange={(e) => setResourceTitle(e.target.value)}
+                        />
                       </div>
                       
                       <div>
@@ -225,13 +333,15 @@ const Upload = () => {
                           placeholder="Paste BibTeX content here..." 
                           className="mt-1 font-mono text-sm" 
                           rows={8}
+                          value={citationContent}
+                          onChange={(e) => setCitationContent(e.target.value)}
                         />
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label htmlFor="bibtex-course">Course</Label>
-                          <Select>
+                          <Select value={selectedCourse} onValueChange={setSelectedCourse}>
                             <SelectTrigger id="bibtex-course" className="mt-1">
                               <SelectValue placeholder="Select course" />
                             </SelectTrigger>
@@ -247,7 +357,13 @@ const Upload = () => {
                         <div>
                           <Label htmlFor="bibtex-estimated-time">Estimated Time</Label>
                           <div className="flex mt-1">
-                            <Input id="bibtex-estimated-time" type="number" placeholder="Minutes" />
+                            <Input 
+                              id="bibtex-estimated-time" 
+                              type="number" 
+                              placeholder="Minutes"
+                              value={estimatedTime}
+                              onChange={(e) => setEstimatedTime(e.target.value)}
+                            />
                             <div className="ml-2 px-3 bg-primary-50 flex items-center rounded-md">
                               <span className="text-sm text-primary-700">minutes</span>
                             </div>
@@ -255,7 +371,7 @@ const Upload = () => {
                         </div>
                       </div>
                       
-                      <Button className="w-full">Add Citation</Button>
+                      <Button className="w-full" onClick={handleSubmit}>Add Citation</Button>
                     </div>
                   </TabsContent>
                 </Tabs>

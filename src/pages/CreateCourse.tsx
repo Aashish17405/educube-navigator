@@ -54,6 +54,7 @@ const CreateCourse = () => {
   const [courseDescription, setCourseDescription] = useState("");
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState("");
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   
   const [modules, setModules] = useState<Module[]>([
     {
@@ -233,6 +234,21 @@ const CreateCourse = () => {
     }
   };
   
+  const handleThumbnailUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setThumbnailPreview(event.target.result as string);
+        }
+      };
+      
+      reader.readAsDataURL(file);
+    }
+  };
+  
   const handleSaveAsDraft = () => {
     if (!courseTitle) {
       toast({
@@ -250,7 +266,7 @@ const CreateCourse = () => {
       difficulty: difficulty || "beginner",
       instructor: "Jane Doe",
       modules,
-      thumbnail: "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
+      thumbnail: thumbnailPreview || "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
     });
     
     toast({
@@ -297,7 +313,7 @@ const CreateCourse = () => {
       difficulty,
       instructor: "Jane Doe",
       modules,
-      thumbnail: "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
+      thumbnail: thumbnailPreview || "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
     });
     
     toast({
@@ -381,11 +397,32 @@ const CreateCourse = () => {
                 <div>
                   <Label htmlFor="thumbnail">Course Thumbnail</Label>
                   <div className="mt-1 border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
-                    <FileUp className="h-10 w-10 mx-auto text-gray-400 mb-4" />
+                    {thumbnailPreview ? (
+                      <div className="mb-4">
+                        <img 
+                          src={thumbnailPreview} 
+                          alt="Course thumbnail preview" 
+                          className="max-h-40 mx-auto rounded-md" 
+                        />
+                      </div>
+                    ) : (
+                      <FileUp className="h-10 w-10 mx-auto text-gray-400 mb-4" />
+                    )}
                     <p className="text-sm text-muted-foreground mb-4">
-                      Upload a thumbnail image for your course
+                      {thumbnailPreview ? "Change thumbnail image" : "Upload a thumbnail image for your course"}
                     </p>
-                    <Button variant="outline">Upload Image</Button>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      id="thumbnail-upload"
+                      onChange={handleThumbnailUpload}
+                    />
+                    <label htmlFor="thumbnail-upload">
+                      <Button variant="outline" onClick={() => document.getElementById('thumbnail-upload')?.click()}>
+                        {thumbnailPreview ? "Change Image" : "Upload Image"}
+                      </Button>
+                    </label>
                   </div>
                 </div>
               </CardContent>
