@@ -1,13 +1,38 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import { MainLayout } from "@/components/layout/MainLayout";
+import { ProgressStats } from "@/components/dashboard/ProgressStats";
+import { ProgressChart } from "@/components/dashboard/ProgressChart";
+import { UpcomingLessons } from "@/components/dashboard/UpcomingLessons";
+import { CourseProgress } from "@/components/dashboard/CourseProgress";
+import { ResourceList } from "@/components/dashboard/ResourceList";
+import { ProfileCompletion } from "@/components/dashboard/ProfileCompletion";
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">Start building your amazing project here!</p>
+    <MainLayout>
+      <div className="animate-fade-in">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Learning Dashboard</h1>
+          <p className="text-muted-foreground">Track your progress and manage your learning journey</p>
+        </div>
+        
+        <ProgressStats />
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <ProgressChart />
+          <UpcomingLessons />
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <CourseProgress />
+          <ResourceList />
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <ProfileCompletion />
+        </div>
       </div>
-    </div>
+    </MainLayout>
   );
 };
 
