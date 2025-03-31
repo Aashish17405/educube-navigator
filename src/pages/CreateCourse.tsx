@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { 
   Card, 
@@ -34,7 +34,12 @@ import {
   FileUp,
   PlayCircle,
   FileQuestion,
-  BookText
+  BookText,
+  Link as LinkIcon,
+  Timer,
+  FileText,
+  File,
+  Loader2
 } from "lucide-react";
 import { 
   Accordion,
@@ -43,654 +48,728 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
-import { useCoursesStore, Module, Lesson } from "@/store/coursesStore";
+import { courseService } from "@/services/api";
+import { useAuth } from "@/contexts/AuthContext";
+import api from "@/services/api";
+
+interface Resource {
+  title: string;
+  type: 'pdf' | 'word' | 'excel' | 'bibtex' | 'link' | 'video';
+  url: string;
+  estimatedTime?: number;
+}
+
+interface Lesson {
+  title: string;
+  type: 'video' | 'quiz' | 'reading' | 'assignment';
+  content: string;
+  resources: Resource[];
+  estimatedTime?: number;
+  completionCriteria: 'view' | 'quiz' | 'time';
+  requiredScore?: number;
+  requiredTime?: number;
+}
+
+interface Module {
+  title: string;
+  description: string;
+  lessons: Lesson[];
+  prerequisites: string[];
+}
+
+interface Quiz {
+  title: string;
+  questions: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+    points: number;
+  }[];
+  passingScore: number;
+  timeLimit: number;
+}
 
 const CreateCourse = () => {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const addCourse = useCoursesStore(state => state.addCourse);
-  
   const [courseTitle, setCourseTitle] = useState("");
-  const [courseDescription, setCourseDescription] = useState("");
+  const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState("");
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [modules, setModules] = useState<Module[]>([]);
+  const [learningPath, setLearningPath] = useState<{ moduleId: string; requiredModules: string[] }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   
-  const [modules, setModules] = useState<Module[]>([
-    {
-      id: "module-1",
-      title: "Introduction to the Course",
-      description: "An overview of what you'll learn",
-      lessons: [
-        {
-          id: "lesson-1-1",
-          title: "Welcome and Course Overview",
-          type: "video",
-          estimatedTime: "15",
-          content: "Welcome video introducing the course"
-        },
-        {
-          id: "lesson-1-2",
-          title: "Getting Started",
-          type: "reading",
-          estimatedTime: "20",
-          content: "Essential reading material to get started"
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const { getToken } = useAuth();
+
+  const handleFileUpload = async (file: File, type: 'thumbnail' | 'resource'): Promise<string> => {
+    console.log(`Starting ${type} upload:`, file.name);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      console.log('Sending file to server...', {
+        type: file.type,
+        size: file.size,
+        name: file.name
+      });
+
+      const response = await api.post('/uploads', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
         }
-      ]
+      });
+
+      console.log('Upload successful:', response.data);
+      return response.data.url;
+    } catch (error) {
+      console.error('Upload error:', error);
+      throw new Error(error.response?.data?.message || 'Upload failed');
     }
-  ]);
-  
-  const addModule = () => {
-    const newModule: Module = {
-      id: `module-${modules.length + 1}`,
-      title: `Module ${modules.length + 1}`,
-      description: "",
-      lessons: []
-    };
-    setModules([...modules, newModule]);
   };
-  
-  const removeModule = (moduleId: string) => {
-    setModules(modules.filter(module => module.id !== moduleId));
-  };
-  
-  const addLesson = (moduleId: string) => {
-    const updatedModules = modules.map(module => {
-      if (module.id === moduleId) {
-        const newLesson: Lesson = {
-          id: `lesson-${moduleId}-${module.lessons.length + 1}`,
-          title: `Lesson ${module.lessons.length + 1}`,
-          type: "reading",
-          estimatedTime: "30"
-        };
-        return {
-          ...module,
-          lessons: [...module.lessons, newLesson]
-        };
-      }
-      return module;
-    });
-    setModules(updatedModules);
-  };
-  
-  const removeLesson = (moduleId: string, lessonId: string) => {
-    const updatedModules = modules.map(module => {
-      if (module.id === moduleId) {
-        return {
-          ...module,
-          lessons: module.lessons.filter(lesson => lesson.id !== lessonId)
-        };
-      }
-      return module;
-    });
-    setModules(updatedModules);
-  };
-  
-  const updateModule = (moduleId: string, field: keyof Module, value: string) => {
-    const updatedModules = modules.map(module => {
-      if (module.id === moduleId) {
-        return { ...module, [field]: value };
-      }
-      return module;
-    });
-    setModules(updatedModules);
-  };
-  
-  const updateLesson = (
-    moduleId: string, 
-    lessonId: string, 
-    field: keyof Lesson, 
-    value: string
-  ) => {
-    const updatedModules = modules.map(module => {
-      if (module.id === moduleId) {
-        const updatedLessons = module.lessons.map(lesson => {
-          if (lesson.id === lessonId) {
-            return { ...lesson, [field]: value };
-          }
-          return lesson;
+
+  const handleThumbnailChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      try {
+        if (!file.type.startsWith('image/')) {
+          toast({
+            title: "Error",
+            description: "Please select an image file (JPEG, PNG, etc.)",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setIsUploading(true);
+        const url = await handleFileUpload(file, 'thumbnail');
+        setThumbnail(file);
+        setThumbnailPreview(url);
+        toast({
+          title: "Success",
+          description: "Thumbnail uploaded successfully",
         });
-        return { ...module, lessons: updatedLessons };
+      } catch (error) {
+        console.error('Thumbnail upload error:', error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to upload thumbnail",
+          variant: "destructive",
+        });
+      } finally {
+        setIsUploading(false);
       }
-      return module;
+    }
+  };
+
+  const handleAddResource = async (file: File) => {
+    try {
+      console.log('Adding resource:', file.name);
+      const fileType = file.type.split('/')[1];
+      let type: typeof resources[0]['type'];
+
+      // Determine file type
+      switch (fileType) {
+        case 'pdf':
+          type = 'pdf';
+          break;
+        case 'msword':
+        case 'vnd.openxmlformats-officedocument.wordprocessingml.document':
+          type = 'word';
+          break;
+        case 'mp4':
+        case 'webm':
+          type = 'video';
+          break;
+        default:
+          console.error('Unsupported file type:', fileType);
+          toast({
+            title: "Error",
+            description: "Unsupported file type",
+            variant: "destructive",
+          });
+          return;
+      }
+
+      setIsUploading(true);
+      const fileUrl = await handleFileUpload(file, 'resource');
+      setResources(prev => [...prev, {
+        title: file.name,
+        type,
+        url: fileUrl,
+        estimatedTime: 0
+      }]);
+
+      toast({
+        title: "Success",
+        description: "Resource added successfully",
+      });
+    } catch (error) {
+      console.error('Error adding resource:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add resource",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleAddVideoLink = (url: string, title: string) => {
+    setResources(prev => [...prev, {
+      title,
+      type: 'video',
+      url,
+      estimatedTime: 0
+    }]);
+
+    toast({
+      title: "Success",
+      description: "Video link added successfully",
     });
-    setModules(updatedModules);
   };
-  
-  const onDragEnd = (result: DropResult) => {
-    const { destination, source, type } = result;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    if (!destination) return;
-    
-    if (
-      destination.droppableId === source.droppableId &&
-      destination.index === source.index
-    ) {
+    // Validate required fields
+    if (!courseTitle.trim()) {
+      toast({
+        title: "Error",
+        description: "Course title is required",
+        variant: "destructive",
+      });
       return;
     }
-    
-    if (type === "module") {
-      const reorderedModules = Array.from(modules);
-      const [removed] = reorderedModules.splice(source.index, 1);
-      reorderedModules.splice(destination.index, 0, removed);
-      setModules(reorderedModules);
+
+    if (!description.trim()) {
+      toast({
+        title: "Error",
+        description: "Course description is required",
+        variant: "destructive",
+      });
       return;
     }
-    
-    const sourceModuleId = source.droppableId;
-    const destModuleId = destination.droppableId;
-    
-    const sourceModule = modules.find(m => m.id === sourceModuleId);
-    const destModule = modules.find(m => m.id === destModuleId);
-    
-    if (!sourceModule || !destModule) return;
-    
-    if (sourceModuleId === destModuleId) {
-      const newLessons = Array.from(sourceModule.lessons);
-      const [removed] = newLessons.splice(source.index, 1);
-      newLessons.splice(destination.index, 0, removed);
-      
-      const newModules = modules.map(module => {
-        if (module.id === sourceModuleId) {
-          return { ...module, lessons: newLessons };
-        }
-        return module;
+
+    if (!category) {
+      toast({
+        title: "Error",
+        description: "Please select a category",
+        variant: "destructive",
       });
-      
-      setModules(newModules);
-    } else {
-      const sourceModuleLessons = Array.from(sourceModule.lessons);
-      const [removed] = sourceModuleLessons.splice(source.index, 1);
-      
-      const destModuleLessons = Array.from(destModule.lessons);
-      destModuleLessons.splice(destination.index, 0, removed);
-      
-      const newModules = modules.map(module => {
-        if (module.id === sourceModuleId) {
-          return { ...module, lessons: sourceModuleLessons };
-        }
-        if (module.id === destModuleId) {
-          return { ...module, lessons: destModuleLessons };
-        }
-        return module;
+      return;
+    }
+
+    if (!difficulty) {
+      toast({
+        title: "Error",
+        description: "Please select a difficulty level",
+        variant: "destructive",
       });
-      
-      setModules(newModules);
+      return;
     }
-  };
-  
-  const getLessonIcon = (type: Lesson["type"]) => {
-    switch (type) {
-      case "video":
-        return <PlayCircle className="h-4 w-4 text-blue-500" />;
-      case "quiz":
-        return <FileQuestion className="h-4 w-4 text-green-500" />;
-      case "reading":
-        return <BookText className="h-4 w-4 text-amber-500" />;
-      case "assignment":
-        return <FileUp className="h-4 w-4 text-purple-500" />;
-      default:
-        return <BookText className="h-4 w-4" />;
-    }
-  };
-  
-  const handleThumbnailUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setThumbnailPreview(event.target.result as string);
-        }
+
+    setIsSubmitting(true);
+
+    try {
+      const courseData = {
+        title: courseTitle,
+        description,
+        category,
+        difficulty,
+        thumbnail: thumbnailPreview,
+        resources,
+        modules,
+        estimatedTotalTime: modules.reduce((total, module) => 
+          total + module.lessons.reduce((lessonTotal, lesson) => 
+            lessonTotal + (lesson.estimatedTime || 0), 0), 0),
+        learningPath: modules.map((module, index) => ({
+          moduleId: module.title,
+          requiredModules: module.prerequisites
+        })),
+        isDraft: false
       };
-      
-      reader.readAsDataURL(file);
+
+      console.log('Creating course with data:', courseData);
+      const response = await api.post('/courses', courseData);
+
+      if (!response.data) throw new Error('Failed to create course');
+
+      toast({
+        title: "Success",
+        description: "Course created successfully",
+      });
+      navigate('/courses');
+    } catch (error) {
+      console.error('Error creating course:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create course",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
-  
-  const handleSaveAsDraft = () => {
-    if (!courseTitle) {
-      toast({
-        title: "Missing Information",
-        description: "Please provide a course title",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const courseId = addCourse({
-      title: courseTitle,
-      description: courseDescription,
-      category: category || "Uncategorized",
-      difficulty: difficulty || "beginner",
-      instructor: "Jane Doe",
-      modules,
-      thumbnail: thumbnailPreview || "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
-    });
-    
-    toast({
-      title: "Success!",
-      description: "Course saved as draft"
-    });
-    
-    navigate("/courses");
-  };
-  
-  const handlePublish = () => {
-    if (!courseTitle || !courseDescription || !category || !difficulty) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill out all required fields",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    if (modules.length === 0) {
-      toast({
-        title: "No Modules",
-        description: "Your course needs at least one module",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const emptyModules = modules.filter(module => module.lessons.length === 0);
-    if (emptyModules.length > 0) {
-      toast({
-        title: "Empty Modules",
-        description: `${emptyModules.length} module(s) have no lessons`,
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const courseId = addCourse({
-      title: courseTitle,
-      description: courseDescription,
-      category,
-      difficulty,
-      instructor: "Jane Doe",
-      modules,
-      thumbnail: thumbnailPreview || "https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"
-    });
-    
-    toast({
-      title: "Success!",
-      description: "Course published successfully"
-    });
-    
-    navigate("/courses");
-  };
-  
+
   return (
     <MainLayout>
-      <div className="animate-fade-in">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">Create Learning Path</h1>
-          <p className="text-muted-foreground">Design and structure a new course for your learners</p>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Course Details</CardTitle>
-                <CardDescription>Basic information about your course</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+      <form onSubmit={handleSubmit}>
+        <div className="space-y-6">
+          {/* Basic Information Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Course Information</CardTitle>
+              <CardDescription>Provide basic information about your course</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Basic fields (title, description, etc.) */}
+              <div>
+                <Label htmlFor="course-title">Course Title</Label>
+                <Input 
+                  id="course-title" 
+                  placeholder="Enter course title" 
+                  className="mt-1" 
+                  value={courseTitle}
+                  onChange={(e) => setCourseTitle(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="description">Course Description</Label>
+                <Textarea 
+                  id="description" 
+                  placeholder="Enter course description" 
+                  className="mt-1"
+                  rows={4}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="course-title">Course Title</Label>
-                  <Input 
-                    id="course-title" 
-                    placeholder="Enter course title" 
-                    className="mt-1" 
-                    value={courseTitle}
-                    onChange={(e) => setCourseTitle(e.target.value)}
+                  <Label htmlFor="category">Category</Label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger id="category" className="mt-1">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="data-science">Data Science</SelectItem>
+                      <SelectItem value="web-development">Web Development</SelectItem>
+                      <SelectItem value="design">Design</SelectItem>
+                      <SelectItem value="business">Business</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="difficulty">Difficulty Level</Label>
+                  <Select value={difficulty} onValueChange={setDifficulty}>
+                    <SelectTrigger id="difficulty" className="mt-1">
+                      <SelectValue placeholder="Select level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="beginner">Beginner</SelectItem>
+                      <SelectItem value="intermediate">Intermediate</SelectItem>
+                      <SelectItem value="advanced">Advanced</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="thumbnail">Course Thumbnail</Label>
+                <div className="mt-1 border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
+                  {thumbnailPreview ? (
+                    <div className="mb-4">
+                      <img 
+                        src={thumbnailPreview} 
+                        alt="Course thumbnail preview" 
+                        className="max-h-40 mx-auto rounded-md" 
+                      />
+                    </div>
+                  ) : (
+                    <FileUp className="h-10 w-10 mx-auto text-gray-400 mb-4" />
+                  )}
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {thumbnailPreview ? "Change thumbnail image" : "Upload a thumbnail image for your course"}
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    id="thumbnail-upload"
+                    onChange={handleThumbnailChange}
+                    disabled={isUploading}
                   />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="category">Category</Label>
-                    <Select value={category} onValueChange={setCategory}>
-                      <SelectTrigger id="category" className="mt-1">
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="data-science">Data Science</SelectItem>
-                        <SelectItem value="web-development">Web Development</SelectItem>
-                        <SelectItem value="design">Design</SelectItem>
-                        <SelectItem value="business">Business</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="difficulty">Difficulty Level</Label>
-                    <Select value={difficulty} onValueChange={setDifficulty}>
-                      <SelectTrigger id="difficulty" className="mt-1">
-                        <SelectValue placeholder="Select level" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="beginner">Beginner</SelectItem>
-                        <SelectItem value="intermediate">Intermediate</SelectItem>
-                        <SelectItem value="advanced">Advanced</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                
-                <div>
-                  <Label htmlFor="description">Course Description</Label>
-                  <Textarea 
-                    id="description" 
-                    placeholder="Enter course description" 
-                    className="mt-1"
-                    rows={4}
-                    value={courseDescription}
-                    onChange={(e) => setCourseDescription(e.target.value)}
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="thumbnail">Course Thumbnail</Label>
-                  <div className="mt-1 border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
-                    {thumbnailPreview ? (
-                      <div className="mb-4">
-                        <img 
-                          src={thumbnailPreview} 
-                          alt="Course thumbnail preview" 
-                          className="max-h-40 mx-auto rounded-md" 
-                        />
-                      </div>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById('thumbnail-upload')?.click();
+                    }}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
                     ) : (
-                      <FileUp className="h-10 w-10 mx-auto text-gray-400 mb-4" />
+                      thumbnailPreview ? "Change Image" : "Upload Image"
                     )}
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {thumbnailPreview ? "Change thumbnail image" : "Upload a thumbnail image for your course"}
-                    </p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      id="thumbnail-upload"
-                      onChange={handleThumbnailUpload}
-                    />
-                    <label htmlFor="thumbnail-upload">
-                      <Button variant="outline" onClick={() => document.getElementById('thumbnail-upload')?.click()}>
-                        {thumbnailPreview ? "Change Image" : "Upload Image"}
-                      </Button>
-                    </label>
-                  </div>
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>Course Curriculum</CardTitle>
-                <CardDescription>Organize your course into modules and lessons</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DragDropContext onDragEnd={onDragEnd}>
-                  <Droppable droppableId="modules" type="module">
-                    {(provided) => (
-                      <div
-                        {...provided.droppableProps}
-                        ref={provided.innerRef}
-                        className="space-y-4"
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Course Resources Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Course Resources</CardTitle>
+              <CardDescription>Upload or link to course materials</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-4">
+                <Input
+                  type="file"
+                  id="resource-upload"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    handleAddResource(file);
+                  }}
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.bibtex,.mp4,.webm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const url = prompt('Enter URL:');
+                    const title = prompt('Enter title:');
+                    if (url && title) handleAddVideoLink(url, title);
+                  }}
+                >
+                  <LinkIcon className="w-4 h-4 mr-2" />
+                  Add Link
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => document.getElementById('resource-upload')?.click()}
+                >
+                  <FileUp className="w-4 h-4 mr-2" />
+                  Upload File
+                </Button>
+              </div>
+
+              {/* Resource List */}
+              <div className="space-y-2">
+                {resources.map((resource, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 border rounded">
+                    <div className="flex items-center gap-2">
+                      {resource.type === 'pdf' && <FileText className="w-4 h-4" />}
+                      {resource.type === 'word' && <File className="w-4 h-4" />}
+                      {resource.type === 'excel' && <FileText className="w-4 h-4" />}
+                      {resource.type === 'bibtex' && <FileText className="w-4 h-4" />}
+                      {resource.type === 'link' && <LinkIcon className="w-4 h-4" />}
+                      {resource.type === 'video' && <PlayCircle className="w-4 h-4" />}
+                      <span>{resource.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Est. time (min)"
+                        className="w-32"
+                        value={resource.estimatedTime || ''}
+                        onChange={(e) => {
+                          const time = parseInt(e.target.value);
+                          setResources(prev => prev.map((r, i) => 
+                            i === index ? { ...r, estimatedTime: time } : r
+                          ));
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setResources(prev => prev.filter((_, i) => i !== index));
+                        }}
                       >
-                        {modules.map((module, moduleIndex) => (
-                          <Draggable
-                            key={module.id}
-                            draggableId={module.id}
-                            index={moduleIndex}
-                          >
-                            {(provided) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                className="border rounded-lg overflow-hidden"
-                              >
-                                <div className="p-4 bg-gray-50 flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <div {...provided.dragHandleProps}>
-                                      <Grip className="h-5 w-5 text-gray-400" />
-                                    </div>
-                                    <div>
-                                      <Input
-                                        value={module.title}
-                                        onChange={(e) => updateModule(module.id, "title", e.target.value)}
-                                        className="font-medium border-0 bg-transparent p-0 text-lg focus-visible:ring-0 focus-visible:ring-offset-0"
-                                        placeholder="Module Title"
-                                      />
-                                    </div>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Modules and Lessons */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Course Curriculum</CardTitle>
+              <CardDescription>Organize your course into modules and lessons</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DragDropContext onDragEnd={(result) => console.log(result)}>
+                <Droppable droppableId="modules" type="module">
+                  {(provided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className="space-y-4"
+                    >
+                      {modules.map((module, moduleIndex) => (
+                        <Draggable
+                          key={module.title}
+                          draggableId={module.title}
+                          index={moduleIndex}
+                        >
+                          {(provided) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              className="border rounded-lg overflow-hidden"
+                            >
+                              <div className="p-4 bg-gray-50 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div {...provided.dragHandleProps}>
+                                    <Grip className="h-5 w-5 text-gray-400" />
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => removeModule(module.id)}
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
+                                  <div>
+                                    <Input
+                                      value={module.title}
+                                      onChange={(e) => {
+                                        setModules(prev => prev.map((m, i) => 
+                                          i === moduleIndex ? { ...m, title: e.target.value } : m
+                                        ));
+                                      }}
+                                      className="font-medium border-0 bg-transparent p-0 text-lg focus-visible:ring-0 focus-visible:ring-offset-0"
+                                      placeholder="Module Title"
+                                    />
                                   </div>
                                 </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setModules(prev => prev.filter((_, i) => i !== moduleIndex));
+                                    }}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              <div className="p-4">
+                                <Textarea
+                                  value={module.description}
+                                  onChange={(e) => {
+                                    setModules(prev => prev.map((m, i) => 
+                                      i === moduleIndex ? { ...m, description: e.target.value } : m
+                                    ));
+                                  }}
+                                  placeholder="Module description..."
+                                  className="mb-4 resize-none"
+                                  rows={2}
+                                />
                                 
-                                <div className="p-4">
-                                  <Textarea
-                                    value={module.description}
-                                    onChange={(e) => updateModule(module.id, "description", e.target.value)}
-                                    placeholder="Module description..."
-                                    className="mb-4 resize-none"
-                                    rows={2}
-                                  />
-                                  
-                                  <Accordion type="multiple" className="w-full">
-                                    <AccordionItem value="lessons" className="border-none">
-                                      <AccordionTrigger className="py-2 px-0">
-                                        <span className="text-sm font-medium">Lessons ({module.lessons.length})</span>
-                                      </AccordionTrigger>
-                                      <AccordionContent>
-                                        <Droppable droppableId={module.id} type="lesson">
-                                          {(provided) => (
-                                            <div
-                                              {...provided.droppableProps}
-                                              ref={provided.innerRef}
-                                              className="space-y-2"
-                                            >
-                                              {module.lessons.map((lesson, lessonIndex) => (
-                                                <Draggable
-                                                  key={lesson.id}
-                                                  draggableId={lesson.id}
-                                                  index={lessonIndex}
-                                                >
-                                                  {(provided) => (
-                                                    <div
-                                                      ref={provided.innerRef}
-                                                      {...provided.draggableProps}
-                                                      className="border rounded-md p-3"
-                                                    >
-                                                      <div className="flex items-center justify-between mb-2">
-                                                        <div className="flex items-center gap-2">
-                                                          <div {...provided.dragHandleProps}>
-                                                            <Grip className="h-4 w-4 text-gray-400" />
-                                                          </div>
-                                                          {getLessonIcon(lesson.type)}
-                                                          <Input
-                                                            value={lesson.title}
-                                                            onChange={(e) => updateLesson(module.id, lesson.id, "title", e.target.value)}
-                                                            className="font-medium border-0 bg-transparent p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0"
-                                                            placeholder="Lesson Title"
-                                                          />
+                                <Accordion type="multiple" className="w-full">
+                                  <AccordionItem value="lessons" className="border-none">
+                                    <AccordionTrigger className="py-2 px-0">
+                                      <span className="text-sm font-medium">Lessons ({module.lessons.length})</span>
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                      <Droppable droppableId={module.title} type="lesson">
+                                        {(provided) => (
+                                          <div
+                                            {...provided.droppableProps}
+                                            ref={provided.innerRef}
+                                            className="space-y-2"
+                                          >
+                                            {module.lessons.map((lesson, lessonIndex) => (
+                                              <Draggable
+                                                key={lesson.title}
+                                                draggableId={lesson.title}
+                                                index={lessonIndex}
+                                              >
+                                                {(provided) => (
+                                                  <div
+                                                    ref={provided.innerRef}
+                                                    {...provided.draggableProps}
+                                                    className="border rounded-md p-3"
+                                                  >
+                                                    <div className="flex items-center justify-between mb-2">
+                                                      <div className="flex items-center gap-2">
+                                                        <div {...provided.dragHandleProps}>
+                                                          <Grip className="h-4 w-4 text-gray-400" />
                                                         </div>
-                                                        <Button
-                                                          variant="ghost"
-                                                          size="sm"
-                                                          onClick={() => removeLesson(module.id, lesson.id)}
-                                                          className="h-6 w-6 p-0"
-                                                        >
-                                                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                                                        </Button>
+                                                        <PlayCircle className="h-4 w-4 text-blue-500" />
+                                                        <Input
+                                                          value={lesson.title}
+                                                          onChange={(e) => {
+                                                            setModules(prev => prev.map((m, i) => 
+                                                              i === moduleIndex ? { 
+                                                                ...m, 
+                                                                lessons: m.lessons.map((l, j) => 
+                                                                  j === lessonIndex ? { ...l, title: e.target.value } : l
+                                                                ) 
+                                                              } : m
+                                                            ));
+                                                          }}
+                                                          className="font-medium border-0 bg-transparent p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                          placeholder="Lesson Title"
+                                                        />
                                                       </div>
+                                                      <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                          setModules(prev => prev.map((m, i) => 
+                                                            i === moduleIndex ? { 
+                                                              ...m, 
+                                                              lessons: m.lessons.filter((_, j) => j !== lessonIndex) 
+                                                            } : m
+                                                          ));
+                                                        }}
+                                                        className="h-6 w-6 p-0"
+                                                      >
+                                                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                                                      </Button>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                      <Select
+                                                        value={lesson.type}
+                                                        onValueChange={(value: any) => {
+                                                          setModules(prev => prev.map((m, i) => 
+                                                            i === moduleIndex ? { 
+                                                              ...m, 
+                                                              lessons: m.lessons.map((l, j) => 
+                                                                j === lessonIndex ? { ...l, type: value } : l
+                                                              ) 
+                                                            } : m
+                                                          ));
+                                                        }}
+                                                      >
+                                                        <SelectTrigger className="h-8 text-xs">
+                                                          <SelectValue placeholder="Type" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                          <SelectItem value="video">Video</SelectItem>
+                                                          <SelectItem value="reading">Reading</SelectItem>
+                                                          <SelectItem value="quiz">Quiz</SelectItem>
+                                                          <SelectItem value="assignment">Assignment</SelectItem>
+                                                        </SelectContent>
+                                                      </Select>
                                                       
-                                                      <div className="grid grid-cols-2 gap-2">
-                                                        <Select
-                                                          value={lesson.type}
-                                                          onValueChange={(value: any) => updateLesson(
-                                                            module.id, 
-                                                            lesson.id, 
-                                                            "type", 
-                                                            value
-                                                          )}
-                                                        >
-                                                          <SelectTrigger className="h-8 text-xs">
-                                                            <SelectValue placeholder="Type" />
-                                                          </SelectTrigger>
-                                                          <SelectContent>
-                                                            <SelectItem value="video">Video</SelectItem>
-                                                            <SelectItem value="reading">Reading</SelectItem>
-                                                            <SelectItem value="quiz">Quiz</SelectItem>
-                                                            <SelectItem value="assignment">Assignment</SelectItem>
-                                                          </SelectContent>
-                                                        </Select>
-                                                        
-                                                        <div className="flex">
-                                                          <Input 
-                                                            type="number"
-                                                            className="h-8 text-xs"
-                                                            value={lesson.estimatedTime}
-                                                            onChange={(e) => updateLesson(
-                                                              module.id, 
-                                                              lesson.id, 
-                                                              "estimatedTime", 
-                                                              e.target.value
-                                                            )}
-                                                            placeholder="Time"
-                                                          />
-                                                          <div className="ml-1 px-2 bg-gray-100 rounded flex items-center">
-                                                            <span className="text-xs">min</span>
-                                                          </div>
+                                                      <div className="flex">
+                                                        <Input 
+                                                          type="number"
+                                                          className="h-8 text-xs"
+                                                          value={lesson.estimatedTime || ''}
+                                                          onChange={(e) => {
+                                                            const time = parseInt(e.target.value);
+                                                            setModules(prev => prev.map((m, i) => 
+                                                              i === moduleIndex ? { 
+                                                                ...m, 
+                                                                lessons: m.lessons.map((l, j) => 
+                                                                  j === lessonIndex ? { ...l, estimatedTime: time } : l
+                                                                ) 
+                                                              } : m
+                                                            ));
+                                                          }}
+                                                          placeholder="Time"
+                                                        />
+                                                        <div className="ml-1 px-2 bg-gray-100 rounded flex items-center">
+                                                          <span className="text-xs">min</span>
                                                         </div>
                                                       </div>
                                                     </div>
-                                                  )}
-                                                </Draggable>
-                                              ))}
-                                              {provided.placeholder}
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => addLesson(module.id)}
-                                                className="w-full mt-2"
-                                              >
-                                                <Plus className="h-4 w-4 mr-2" /> Add Lesson
-                                              </Button>
-                                            </div>
-                                          )}
-                                        </Droppable>
-                                      </AccordionContent>
-                                    </AccordionItem>
-                                  </Accordion>
-                                </div>
+                                                  </div>
+                                                )}
+                                              </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => {
+                                                setModules(prev => prev.map((m, i) => 
+                                                  i === moduleIndex ? { 
+                                                    ...m, 
+                                                    lessons: [...m.lessons, {
+                                                      title: `Lesson ${m.lessons.length + 1}`,
+                                                      type: "video",
+                                                      content: "",
+                                                      resources: [],
+                                                      estimatedTime: 0,
+                                                      completionCriteria: 'view',
+                                                      requiredScore: undefined,
+                                                      requiredTime: undefined
+                                                    } as Lesson]
+                                                  } : m
+                                                ));
+                                              }}
+                                              className="w-full mt-2"
+                                            >
+                                              <Plus className="h-4 w-4 mr-2" /> Add Lesson
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </Droppable>
+                                    </AccordionContent>
+                                  </AccordionItem>
+                                </Accordion>
                               </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
-                
-                <Button
-                  variant="outline"
-                  onClick={addModule}
-                  className="mt-4 w-full"
-                >
-                  <Plus className="h-4 w-4 mr-2" /> Add Module
-                </Button>
-              </CardContent>
-            </Card>
-            
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={handleSaveAsDraft}>Save as Draft</Button>
-              <Button onClick={handlePublish}>Publish Course</Button>
-            </div>
-          </div>
-          
-          <div>
-            <div className="sticky top-6 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Learning Path Preview</CardTitle>
-                  <CardDescription>Module and lesson structure</CardDescription>
-                </CardHeader>
-                <CardContent className="max-h-[500px] overflow-y-auto pr-0">
-                  {modules.map((module, index) => (
-                    <div key={module.id} className="mb-4">
-                      <div className="font-medium text-sm mb-2 flex items-center gap-2">
-                        <div className="bg-primary-100 text-primary-700 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">
-                          {index + 1}
-                        </div>
-                        <span>{module.title}</span>
-                      </div>
-                      
-                      <div className="pl-8 border-l border-gray-200 ml-3 space-y-1.5">
-                        {module.lessons.map((lesson, i) => (
-                          <div key={lesson.id} className="text-sm flex items-center gap-2">
-                            {getLessonIcon(lesson.type)}
-                            <span className="text-muted-foreground">{lesson.title}</span>
-                          </div>
-                        ))}
-                        
-                        {module.lessons.length === 0 && (
-                          <div className="text-xs text-muted-foreground italic">
-                            No lessons added yet
-                          </div>
-                        )}
-                      </div>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
+                  )}
+                </Droppable>
+              </DragDropContext>
               
-              <Card>
-                <CardHeader>
-                  <CardTitle>Course Stats</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Total Modules:</span>
-                      <span className="font-medium">{modules.length}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Total Lessons:</span>
-                      <span className="font-medium">
-                        {modules.reduce((total, module) => total + module.lessons.length, 0)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Est. Duration:</span>
-                      <span className="font-medium">
-                        {modules.reduce((total, module) => {
-                          return total + module.lessons.reduce((lessonTotal, lesson) => {
-                            return lessonTotal + parseInt(lesson.estimatedTime || "0", 10);
-                          }, 0);
-                        }, 0)} minutes
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setModules(prev => [...prev, {
+                    title: `Module ${prev.length + 1}`,
+                    description: "",
+                    lessons: [],
+                    prerequisites: []
+                  } as Module]);
+                }}
+                className="mt-4 w-full"
+              >
+                <Plus className="h-4 w-4 mr-2" /> Add Module
+              </Button>
+            </CardContent>
+          </Card>
+          
+          <div className="flex justify-end gap-4">
+            <Button
+              variant="outline"
+              onClick={() => handleSubmit({ preventDefault: () => {} } as any)}
+              disabled={isSubmitting}
+            >
+              Publish Course
+            </Button>
           </div>
         </div>
-      </div>
+      </form>
     </MainLayout>
   );
 };
