@@ -16,6 +16,10 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Don't override Content-Type for multipart/form-data
+    if (config.headers['Content-Type'] === 'multipart/form-data') {
+      delete config.headers['Content-Type'];
+    }
     return config;
   },
   (error) => {
@@ -115,6 +119,31 @@ export const authService = {
     role: string 
   }) => {
     const response = await api.post('/auth/register', userData);
+    return response.data;
+  }
+};
+
+export const uploadService = {
+  uploadFile: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/uploads', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
+  downloadFile: async (fileId: string) => {
+    const response = await api.get(`/uploads/file/${fileId}`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  deleteFile: async (publicId: string) => {
+    const response = await api.delete(`/uploads/${publicId}`);
     return response.data;
   }
 };

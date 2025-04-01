@@ -72,6 +72,11 @@ const App = () => (
                 <Upload />
               </ProtectedRoute>
             } />
+            <Route path="/uploads/:id" element={
+              <ProtectedRoute>
+                <CourseView />
+              </ProtectedRoute>
+            } />
             <Route path="/create-course" element={
               <ProtectedRoute allowedRoles={['instructor']}>
                 <CreateCourse />

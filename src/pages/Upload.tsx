@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { 
@@ -25,7 +24,8 @@ import {
   Trash2,
   BookOpen,
   Files,
-  Clock
+  Clock,
+  Link
 } from "lucide-react";
 import { 
   Tabs, 

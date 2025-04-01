@@ -8,6 +8,7 @@ const courseRoutes = require('./routes/courses.js');
 const resourcesRoutes = require('./routes/resources.js');
 const uploadRoutes = require('./routes/uploads.js');
 const dashboardRoutes = require('./routes/dashboard.js');
+const imagekitRoutes = require('./routes/imagekit.js');
 
 const app = express();
 
@@ -30,12 +31,14 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/resources', resourcesRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/imagekit', imagekitRoutes);
 
 // Log environment variables (without secrets)
 console.log('Environment configuration:', {
   port: process.env.PORT,
   mongoUri: process.env.MONGODB_URI?.split('@')[1], // Only show host part
-  cloudinaryConfigured: !!process.env.CLOUDINARY_CLOUD_NAME
+  cloudinaryConfigured: !!process.env.CLOUDINARY_CLOUD_NAME,
+  imagekitConfigured: !!process.env.IMAGEKIT_PUBLIC_KEY
 });
 
 // Error handling middleware

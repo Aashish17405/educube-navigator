@@ -23,11 +23,18 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { VisuallyHidden } from "../components/ui/visually-hidden";
 
 interface Resource {
+  _id?: string;
   title: string;
   type: 'pdf' | 'word' | 'excel' | 'bibtex' | 'link' | 'video';
   url: string;
+  publicId: string;
+  fileName?: string;
+  mimeType?: string;
+  provider?: 'cloudinary' | 'imagekit';
   estimatedTime?: number;
 }
 
@@ -100,6 +107,7 @@ export default function CourseView() {
   const [loading, setLoading] = useState(true);
   const [activeModule, setActiveModule] = useState<string | null>(null);
   const [activeLesson, setActiveLesson] = useState<string | null>(null);
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const { toast } = useToast();
   const { getToken } = useAuth();
 
@@ -198,6 +206,21 @@ export default function CourseView() {
     }
   };
 
+  const getResourceUrl = (resource: Resource) => {
+    // For external resources (links), use the direct URL
+    if (resource.type === 'link') {
+      return resource.url;
+    }
+
+    // For uploaded resources, use the provider's URL
+    if (resource.url) {
+      return resource.url;
+    }
+    
+    console.error('Resource missing URL:', resource);
+    return '';
+  };
+
   const getCurrentModule = () => {
     if (!course || !activeModule) return null;
     return course.modules.find(m => m.id === activeModule);
@@ -282,7 +305,7 @@ export default function CourseView() {
                               {getCurrentLesson()?.resources.map((resource, index) => (
                                 <a
                                   key={index}
-                                  href={resource.url}
+                                  href={getResourceUrl(resource)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-2 p-2 hover:bg-accent rounded-md"
@@ -317,8 +340,7 @@ export default function CourseView() {
                           key={index}
                           href={resource.url}
                           target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-between p-2 hover:bg-accent rounded-md"
+                          className="flex items-center justify-between p-2 hover:bg-accent rounded-md cursor-pointer"
                         >
                           <div className="flex items-center gap-2">
                             {getResourceIcon(resource.type)}
@@ -389,6 +411,64 @@ export default function CourseView() {
           </div>
         </div>
       </div>
+      {/* Resource Viewer Dialog */}
+      <Dialog open={!!selectedResource} onOpenChange={() => setSelectedResource(null)}>
+        <DialogContent className="max-w-4xl h-[80vh]">
+          {selectedResource && (
+            <>
+              <DialogTitle className="text-xl font-semibold">
+                {selectedResource.title}
+              </DialogTitle>
+              <div className="flex justify-end mb-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    const url = getResourceUrl(selectedResource);
+                    if (url) window.open(url, '_blank');
+                  }}
+                >
+                  Open in New Tab
+                </Button>
+              </div>
+              <div className="w-full h-full">
+                {selectedResource.type === 'pdf' ? (
+                  <iframe
+                    src={getResourceUrl(selectedResource)}
+                    className="w-full h-full border-0"
+                    title={selectedResource.title}
+                    sandbox="allow-scripts allow-same-origin allow-forms"
+                  />
+                ) : selectedResource.type === 'video' ? (
+                  <video
+                    src={getResourceUrl(selectedResource)}
+                    controls
+                    className="w-full h-full"
+                    preload="metadata"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : selectedResource.type === 'link' ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Button asChild>
+                      <a href={selectedResource.url} target="_blank" rel="noopener noreferrer">
+                        Open Link
+                      </a>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <Button asChild>
+                      <a href={getResourceUrl(selectedResource)} target="_blank" rel="noopener noreferrer" download={selectedResource.fileName}>
+                        Download {selectedResource.fileName || selectedResource.title}
+                      </a>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }

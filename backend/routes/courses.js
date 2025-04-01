@@ -27,10 +27,27 @@ router.post('/', verifyToken, async (req, res) => {
       description,
       category,
       difficulty,
-      thumbnail,
+      thumbnail: thumbnail ? {
+        url: thumbnail.url,
+        publicId: thumbnail.publicId
+      } : undefined,
       instructor: req.user._id,
-      resources,
-      modules,
+      resources: resources.map(resource => ({
+        ...resource,
+        publicId: resource.publicId,
+        url: resource.url
+      })),
+      modules: modules.map(module => ({
+        ...module,
+        lessons: module.lessons.map(lesson => ({
+          ...lesson,
+          resources: lesson.resources?.map(resource => ({
+            ...resource,
+            publicId: resource.publicId,
+            url: resource.url
+          })) || []
+        }))
+      })),
       estimatedTotalTime,
       learningPath,
       isDraft: isDraft || false

@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { v2: cloudinary } = require('cloudinary');
+const imagekit = require('../config/imagekit');
 const { verifyToken } = require('../middleware/auth');
 const fs = require('fs');
 const { promisify } = require('util');
@@ -9,26 +10,12 @@ const unlinkAsync = promisify(fs.unlink);
 
 const router = express.Router();
 
-// Verify Cloudinary configuration
-const verifyCloudinaryConfig = () => {
-  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
-  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
-    throw new Error('Cloudinary configuration is missing');
-  }
-};
-
 // Configure Cloudinary
-try {
-  verifyCloudinaryConfig();
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-  });
-  console.log('Cloudinary configured successfully');
-} catch (error) {
-  console.error('Cloudinary configuration error:', error.message);
-}
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -38,12 +25,11 @@ if (!fs.existsSync(uploadsDir)) {
 
 // Configure multer for handling file uploads
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: (req, file, cb) => {
     cb(null, uploadsDir);
   },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
   }
 });
 
@@ -51,38 +37,30 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
-    // For thumbnails and images, allow common image formats
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-      return;
-    }
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/x-bibtex',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'video/mp4',
+      'video/quicktime'
+    ];
 
-    // For other resources, check specific file types
-    const allowedTypes = {
-      'application/pdf': true,
-      'application/msword': true,
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': true,
-      'video/mp4': true,
-      'video/webm': true
-    };
-
-    if (allowedTypes[file.mimetype]) {
+    if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type'), false);
+      cb(new Error('Invalid file type. Only PDF, Word, Excel, BibTeX, images, and videos are allowed.'));
     }
   }
 }).single('file');
 
 // Upload endpoint
 router.post('/', verifyToken, async (req, res) => {
-  try {
-    // Verify Cloudinary config before processing upload
-    verifyCloudinaryConfig();
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
-
   upload(req, res, async (err) => {
     try {
       if (err) {
@@ -98,95 +76,71 @@ router.post('/', verifyToken, async (req, res) => {
       console.log('Processing upload:', {
         filename: req.file.originalname,
         mimetype: req.file.mimetype,
-        size: req.file.size
+        size: req.file.size,
+        path: req.file.path
       });
 
-      // Handle thumbnails with Cloudinary
-      if (req.file.mimetype.startsWith('image/')) {
-        try {
-          console.log('Uploading to Cloudinary...');
+      try {
+        // Use Cloudinary for images
+        if (req.file.mimetype.startsWith('image/')) {
           const result = await cloudinary.uploader.upload(req.file.path, {
-            folder: 'course-thumbnails',
-            resource_type: 'auto'
+            folder: 'course-resources',
+            resource_type: 'image'
           });
-          console.log('Cloudinary upload successful:', result.secure_url);
-
-          // Delete local file after Cloudinary upload
           await unlinkAsync(req.file.path);
           
           return res.json({
             url: result.secure_url,
-            fileId: result.public_id,
+            publicId: result.public_id,
             fileName: req.file.originalname,
-            mimeType: req.file.mimetype
+            mimeType: req.file.mimetype,
+            provider: 'cloudinary'
           });
-        } catch (cloudinaryError) {
-          console.error('Cloudinary upload error:', cloudinaryError);
-          // Clean up local file
-          if (req.file.path) {
-            try {
-              await unlinkAsync(req.file.path);
-            } catch (unlinkError) {
-              console.error('Error deleting local file:', unlinkError);
-            }
-          }
-          throw cloudinaryError;
         }
-      }
+        
+        // Use ImageKit for other files
+        const fileBuffer = await fs.promises.readFile(req.file.path);
+        const fileName = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        
+        // Upload file to ImageKit
+        const result = await imagekit.upload({
+          file: fileBuffer,
+          fileName: fileName,
+          folder: '/course-resources',
+          useUniqueFileName: true
+        });
 
-      // Handle other files locally
-      const fileUrl = `/uploads/${req.file.filename}`;
-      console.log('File saved locally:', fileUrl);
-      
-      res.json({
-        url: fileUrl,
-        fileId: req.file.filename,
-        fileName: req.file.originalname,
-        mimeType: req.file.mimetype
-      });
+        await unlinkAsync(req.file.path);
+
+        // For PDFs, append the PDF viewer transformation to the URL
+        const fileUrl = req.file.mimetype === 'application/pdf' 
+          ? `${result.url}?tr=orig-true`
+          : result.url;
+
+        return res.json({
+          url: fileUrl,
+          publicId: result.fileId,
+          fileName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          provider: 'imagekit'
+        });
+
+      } catch (uploadError) {
+        console.error('Upload error:', uploadError);
+        if (req.file.path) {
+          try {
+            await unlinkAsync(req.file.path);
+          } catch (unlinkError) {
+            console.error('Error deleting local file:', unlinkError);
+          }
+        }
+        throw uploadError;
+      }
     } catch (error) {
       console.error('Upload processing error:', error);
-      // Clean up local file if it exists
-      if (req.file && req.file.path) {
-        try {
-          await unlinkAsync(req.file.path);
-        } catch (unlinkError) {
-          console.error('Error deleting local file:', unlinkError);
-        }
-      }
-      res.status(500).json({ 
-        message: error.message || 'Upload failed',
-        details: error.message
-      });
+      return res.status(500).json({ message: error.message });
     }
   });
-});
-
-// Serve uploaded files
-router.get('/:filename', verifyToken, (req, res) => {
-  const file = path.join(uploadsDir, req.params.filename);
-  res.sendFile(file);
-});
-
-// Delete file
-router.delete('/:fileId', verifyToken, async (req, res) => {
-  try {
-    const fileId = req.params.fileId;
-
-    // Check if it's a Cloudinary image (thumbnails)
-    if (fileId.includes('course-thumbnails/')) {
-      await cloudinary.uploader.destroy(fileId);
-      return res.json({ message: 'File deleted successfully' });
-    }
-
-    // For local files
-    const filePath = path.join(uploadsDir, fileId);
-    await unlinkAsync(filePath);
-    res.json({ message: 'File deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting file:', error);
-    res.status(500).json({ message: error.message });
-  }
 });
 
 module.exports = router;

@@ -1,7 +1,10 @@
 const mongoose = require('mongoose');
 
 const resourceSchema = new mongoose.Schema({
-  title: String,
+  title: {
+    type: String,
+    required: true
+  },
   type: {
     type: String,
     enum: ['pdf', 'word', 'excel', 'bibtex', 'link', 'video'],
@@ -11,8 +14,23 @@ const resourceSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  publicId: String,
-  estimatedTime: Number,
+  publicId: {
+    type: String,
+    required: true,
+    validate: {
+      validator: function(v) {
+        // Allow both Cloudinary/ImageKit publicIds and our external link IDs
+        return v.length > 0;
+      },
+      message: 'PublicId cannot be empty'
+    }
+  },
+  fileName: String,
+  mimeType: String,
+  estimatedTime: {
+    type: Number,
+    default: 0
+  },
   uploadedAt: {
     type: Date,
     default: Date.now

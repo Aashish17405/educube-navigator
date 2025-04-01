@@ -56,6 +56,9 @@ interface Resource {
   title: string;
   type: 'pdf' | 'word' | 'excel' | 'bibtex' | 'link' | 'video';
   url: string;
+  publicId: string;
+  fileName?: string;
+  mimeType?: string;
   estimatedTime?: number;
 }
 
@@ -90,23 +93,22 @@ interface Quiz {
 }
 
 const CreateCourse = () => {
-  const [courseTitle, setCourseTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
-  const [difficulty, setDifficulty] = useState("");
-  const [thumbnail, setThumbnail] = useState<File | null>(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [courseTitle, setCourseTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [difficulty, setDifficulty] = useState('');
+  const [thumbnailPreview, setThumbnailPreview] = useState('');
+  const [thumbnailPublicId, setThumbnailPublicId] = useState('');
   const [resources, setResources] = useState<Resource[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [learningPath, setLearningPath] = useState<{ moduleId: string; requiredModules: string[] }[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const { toast } = useToast();
   const navigate = useNavigate();
   const { getToken } = useAuth();
 
-  const handleFileUpload = async (file: File, type: 'thumbnail' | 'resource'): Promise<string> => {
+  const handleFileUpload = async (file: File, type: 'thumbnail' | 'resource'): Promise<{ url: string; publicId: string; fileName?: string; mimeType?: string }> => {
     console.log(`Starting ${type} upload:`, file.name);
     try {
       const formData = new FormData();
@@ -125,10 +127,20 @@ const CreateCourse = () => {
       });
 
       console.log('Upload successful:', response.data);
-      return response.data.url;
-    } catch (error) {
+      return {
+        url: response.data.url,
+        publicId: response.data.publicId,
+        fileName: response.data.fileName,
+        mimeType: response.data.mimeType
+      };
+    } catch (error: any) {
       console.error('Upload error:', error);
-      throw new Error(error.response?.data?.message || 'Upload failed');
+      toast({
+        title: "Upload Failed",
+        description: error.response?.data?.message || error.message || 'Upload failed',
+        variant: "destructive"
+      });
+      throw new Error('Upload failed');
     }
   };
 
@@ -145,10 +157,18 @@ const CreateCourse = () => {
           return;
         }
 
-        setIsUploading(true);
-        const url = await handleFileUpload(file, 'thumbnail');
-        setThumbnail(file);
-        setThumbnailPreview(url);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await api.post('/uploads', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+
+        setThumbnailPreview(response.data.url);
+        setThumbnailPublicId(response.data.publicId);
+        
         toast({
           title: "Success",
           description: "Thumbnail uploaded successfully",
@@ -160,54 +180,34 @@ const CreateCourse = () => {
           description: error instanceof Error ? error.message : "Failed to upload thumbnail",
           variant: "destructive",
         });
-      } finally {
-        setIsUploading(false);
       }
     }
   };
 
-  const handleAddResource = async (file: File) => {
+  const handleAddResource = async (resourceData: { title: string; type: Resource['type']; file?: File; url?: string; estimatedTime?: number }) => {
     try {
-      console.log('Adding resource:', file.name);
-      const fileType = file.type.split('/')[1];
-      let type: typeof resources[0]['type'];
-
-      // Determine file type
-      switch (fileType) {
-        case 'pdf':
-          type = 'pdf';
-          break;
-        case 'msword':
-        case 'vnd.openxmlformats-officedocument.wordprocessingml.document':
-          type = 'word';
-          break;
-        case 'mp4':
-        case 'webm':
-          type = 'video';
-          break;
-        default:
-          console.error('Unsupported file type:', fileType);
-          toast({
-            title: "Error",
-            description: "Unsupported file type",
-            variant: "destructive",
-          });
-          return;
+      if (resourceData.file) {
+        const { url, publicId, fileName, mimeType } = await handleFileUpload(resourceData.file, 'resource');
+        setResources(prev => [...prev, {
+          title: resourceData.title,
+          type: resourceData.type,
+          url,
+          publicId,
+          fileName,
+          mimeType,
+          estimatedTime: resourceData.estimatedTime
+        }]);
+      } else if (resourceData.url) {
+        // For external links, generate a unique publicId
+        const uniqueId = `external_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+        setResources(prev => [...prev, {
+          title: resourceData.title,
+          type: resourceData.type,
+          url: resourceData.url,
+          publicId: uniqueId,
+          estimatedTime: resourceData.estimatedTime
+        }]);
       }
-
-      setIsUploading(true);
-      const fileUrl = await handleFileUpload(file, 'resource');
-      setResources(prev => [...prev, {
-        title: file.name,
-        type,
-        url: fileUrl,
-        estimatedTime: 0
-      }]);
-
-      toast({
-        title: "Success",
-        description: "Resource added successfully",
-      });
     } catch (error) {
       console.error('Error adding resource:', error);
       toast({
@@ -215,23 +215,7 @@ const CreateCourse = () => {
         description: error instanceof Error ? error.message : "Failed to add resource",
         variant: "destructive",
       });
-    } finally {
-      setIsUploading(false);
     }
-  };
-
-  const handleAddVideoLink = (url: string, title: string) => {
-    setResources(prev => [...prev, {
-      title,
-      type: 'video',
-      url,
-      estimatedTime: 0
-    }]);
-
-    toast({
-      title: "Success",
-      description: "Video link added successfully",
-    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -282,15 +266,48 @@ const CreateCourse = () => {
         description,
         category,
         difficulty,
-        thumbnail: thumbnailPreview,
-        resources,
-        modules,
+        thumbnail: thumbnailPreview ? {
+          url: thumbnailPreview,
+          publicId: thumbnailPublicId
+        } : undefined,
+        resources: resources.map(resource => ({
+          title: resource.title,
+          type: resource.type,
+          url: resource.url,
+          publicId: resource.publicId,
+          fileName: resource.fileName,
+          mimeType: resource.mimeType,
+          estimatedTime: resource.estimatedTime || 0
+        })),
+        modules: modules.map(module => ({
+          title: module.title,
+          description: module.description || '',
+          prerequisites: module.prerequisites || [],
+          lessons: module.lessons.map(lesson => ({
+            title: lesson.title,
+            type: lesson.type,
+            content: lesson.content || '',
+            estimatedTime: lesson.estimatedTime || 0,
+            resources: lesson.resources?.map(resource => ({
+              title: resource.title,
+              type: resource.type,
+              url: resource.url,
+              publicId: resource.publicId,
+              fileName: resource.fileName,
+              mimeType: resource.mimeType,
+              estimatedTime: resource.estimatedTime || 0
+            })) || [],
+            completionCriteria: lesson.completionCriteria || 'view',
+            requiredScore: lesson.requiredScore,
+            requiredTime: lesson.requiredTime
+          }))
+        })),
         estimatedTotalTime: modules.reduce((total, module) => 
           total + module.lessons.reduce((lessonTotal, lesson) => 
             lessonTotal + (lesson.estimatedTime || 0), 0), 0),
         learningPath: modules.map((module, index) => ({
           moduleId: module.title,
-          requiredModules: module.prerequisites
+          requiredModules: module.prerequisites || []
         })),
         isDraft: false
       };
@@ -402,7 +419,6 @@ const CreateCourse = () => {
                     className="hidden"
                     id="thumbnail-upload"
                     onChange={handleThumbnailChange}
-                    disabled={isUploading}
                   />
                   <Button 
                     type="button" 
@@ -411,16 +427,8 @@ const CreateCourse = () => {
                       e.preventDefault();
                       document.getElementById('thumbnail-upload')?.click();
                     }}
-                    disabled={isUploading}
                   >
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      thumbnailPreview ? "Change Image" : "Upload Image"
-                    )}
+                    {thumbnailPreview ? "Change Image" : "Upload Image"}
                   </Button>
                 </div>
               </div>
@@ -442,7 +450,7 @@ const CreateCourse = () => {
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    handleAddResource(file);
+                    handleAddResource({ title: file.name, type: 'pdf', file });
                   }}
                   accept=".pdf,.doc,.docx,.xls,.xlsx,.bibtex,.mp4,.webm"
                 />
@@ -452,7 +460,7 @@ const CreateCourse = () => {
                   onClick={() => {
                     const url = prompt('Enter URL:');
                     const title = prompt('Enter title:');
-                    if (url && title) handleAddVideoLink(url, title);
+                    if (url && title) handleAddResource({ title, type: 'video', url });
                   }}
                 >
                   <LinkIcon className="w-4 h-4 mr-2" />
