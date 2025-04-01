@@ -362,6 +362,24 @@ export default function CourseView() {
 
           {/* Course Navigation */}
           <div className="col-span-12 lg:col-span-4">
+            <Card className="mb-4">
+              <CardHeader>
+                <CardTitle>Course Resources</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="outline" 
+                  className="w-full flex items-center justify-start gap-2"
+                  onClick={() => {
+                    const resourcesTab = document.querySelector('[data-value="resources"]') as HTMLButtonElement;
+                    if (resourcesTab) resourcesTab.click();
+                  }}
+                >
+                  <File className="h-4 w-4" />
+                  <span>View All Resources ({course.resources.length})</span>
+                </Button>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Course Progress</CardTitle>

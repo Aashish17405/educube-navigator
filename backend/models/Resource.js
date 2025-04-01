@@ -13,10 +13,14 @@ const resourceSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['video', 'document', 'quiz', 'assignment', 'other']
+    enum: ['pdf', 'word', 'excel', 'bibtex', 'video', 'link']
+  },
+  url: {
+    type: String,
+    required: true
   },
   fileId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,  // ImageKit file ID
     required: true
   },
   fileName: {

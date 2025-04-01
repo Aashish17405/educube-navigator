@@ -73,6 +73,15 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/all', async (req, res) => {
+  try {
+    const courses = await Course.find()
+    res.json(courses);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Get a specific course with all details
 router.get('/:id', async (req, res) => {
   try {

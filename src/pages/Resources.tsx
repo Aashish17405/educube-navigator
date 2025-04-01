@@ -1,4 +1,4 @@
-import React, { useState, useEffect, ChangeEvent } from 'react';
+import React, { useState, useEffect, ChangeEvent, useMemo } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
@@ -28,7 +28,8 @@ interface Resource {
   _id: string;
   title: string;
   description: string;
-  type: 'video' | 'document' | 'quiz' | 'assignment' | 'other';
+  type: 'pdf' | 'word' | 'excel' | 'bibtex' | 'video' | 'link';
+  url: string;
   fileId: string;
   fileName: string;
   mimeType: string;
@@ -42,7 +43,6 @@ interface Resource {
     _id: string;
     title: string;
   };
-  createdAt: string;
 }
 
 interface UploadData {
@@ -65,12 +65,12 @@ const Resources: React.FC = () => {
   const [uploadData, setUploadData] = useState<UploadData>({
     title: '',
     description: '',
-    type: 'document',
+    type: 'pdf',
     courseId: '',
     estimatedTime: '',
     file: null
   });
-  const [courses, setCourses] = useState<Array<{ _id: string; title: string }>>([]);
+  const [courses, setCourses] = useState<Array<{ _id: string; title: string; resources: Resource[] }>>([]);
 
   useEffect(() => {
     fetchResources();
@@ -93,8 +93,21 @@ const Resources: React.FC = () => {
 
   const fetchCourses = async () => {
     try {
-      const response = await api.get('/courses');
-      setCourses(response.data);
+      const response = await api.get('/courses/all');
+      const coursesWithResources = response.data;
+      setCourses(coursesWithResources);
+      
+      // Log all course resources
+      console.log('=== Course Resources ===');
+      console.log(response.data)
+      coursesWithResources.forEach(course => {
+        console.log(`\nCourse: ${course.title}`);
+        console.log('Resources:', course.resources);
+      });
+      
+      // Log total resources count
+      const totalResources = coursesWithResources.reduce((total, course) => total + (course.resources?.length || 0), 0);
+      console.log('\nTotal course resources:', totalResources);
     } catch (err) {
       console.error('Error fetching courses:', err);
     }
@@ -124,7 +137,7 @@ const Resources: React.FC = () => {
       setUploadData({
         title: '',
         description: '',
-        type: 'document',
+        type: 'pdf',
         courseId: '',
         estimatedTime: '',
         file: null
@@ -137,53 +150,63 @@ const Resources: React.FC = () => {
     }
   };
 
-  const handleDownload = async (resource: Resource) => {
-    try {
-      const response = await api.get(`/resources/${resource._id}/download`, {
-        responseType: 'blob'
-      });
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', resource.fileName);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Error downloading resource:', err);
-      setError('Failed to download resource');
-    }
-  };
-
   const handleView = async (resource: Resource) => {
     try {
-      const response = await api.get(`/resources/${resource._id}/view`, {
-        responseType: 'blob'
-      });
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      window.open(url, '_blank');
-      window.URL.revokeObjectURL(url);
+      // All resources now have direct URLs from ImageKit
+      window.open(resource.url, '_blank');
     } catch (err) {
       console.error('Error viewing resource:', err);
       setError('Failed to view resource');
     }
   };
 
-  const filteredResources = resources.filter(resource => {
-    const matchesSearch = resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         resource.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = selectedType === 'all' || resource.type === selectedType;
-    return matchesSearch && matchesType;
-  });
+  const isDocumentType = (type: string) => {
+    return ['pdf', 'word', 'excel', 'bibtex'].includes(type);
+  };
+
+  const filteredResources = useMemo(() => {
+    // Combine standalone resources and course resources
+    const allResources = [
+      ...resources,
+      ...courses.flatMap(course => 
+        (course.resources || []).map(resource => ({
+          ...resource,
+          course: {
+            _id: course._id,
+            title: course.title
+          }
+        }))
+      )
+    ];
+
+    // Remove duplicates based on _id
+    const uniqueResources = allResources.filter((resource, index, self) =>
+      index === self.findIndex((r) => r._id === resource._id)
+    );
+
+    // Apply search and type filters
+    return uniqueResources.filter(resource => {
+      const matchesSearch = resource.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         resource.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      // Handle document type filtering
+      const matchesType = selectedType === 'all' || 
+        (selectedType === 'pdf' ? isDocumentType(resource.type) : resource.type === selectedType);
+      
+      return matchesSearch && matchesType;
+    });
+  }, [resources, courses, searchQuery, selectedType]);
 
   return (
     <MainLayout>
       <div className="container mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Resources</h1>
+          <div>
+            <h1 className="text-3xl font-bold">Resources</h1>
+            <p className="text-muted-foreground mt-1">
+              {filteredResources.length} resources found
+            </p>
+          </div>
           {user?.role === 'instructor' && (
             <Button onClick={() => setOpenDialog(true)}>
               Add Resource
@@ -207,11 +230,9 @@ const Resources: React.FC = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="pdf">Documents (PDF, Word, Excel, BibTeX)</SelectItem>
               <SelectItem value="video">Video</SelectItem>
-              <SelectItem value="document">Document</SelectItem>
-              <SelectItem value="quiz">Quiz</SelectItem>
-              <SelectItem value="assignment">Assignment</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              <SelectItem value="link">Link</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -229,34 +250,46 @@ const Resources: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredResources.map((resource) => (
-              <Card key={resource._id}>
+              <Card key={resource._id} className="hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-2">{resource.title}</h3>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Type: {resource.type.charAt(0).toUpperCase() + resource.type.slice(1)}
-                  </p>
-                  <p className="text-sm mb-4">{resource.description}</p>
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <p>Course: {resource.course.title}</p>
-                    <p>Size: {(resource.size / 1024 / 1024).toFixed(2)} MB</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm px-2 py-1 bg-accent rounded-md">
+                      {isDocumentType(resource.type) 
+                        ? 'Document' 
+                        : resource.type.charAt(0).toUpperCase() + resource.type.slice(1)}
+                      {isDocumentType(resource.type) && (
+                        <span className="text-xs ml-1 text-muted-foreground">
+                          ({resource.type.toUpperCase()})
+                        </span>
+                      )}
+                    </span>
                     {resource.estimatedTime && (
-                      <p>Estimated Time: {resource.estimatedTime} minutes</p>
+                      <span className="text-sm text-muted-foreground">
+                        {resource.estimatedTime} min
+                      </span>
                     )}
                   </div>
-                  <div className="mt-4 space-y-2">
+                  <p className="text-sm mb-4 line-clamp-2">{resource.description}</p>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <p className="flex items-center gap-1">
+                      <span className="font-medium">Course:</span>
+                      {resource.course.title}
+                    </p>
+                    {resource.size && (
+                      <p className="flex items-center gap-1">
+                        <span className="font-medium">Size:</span>
+                        {(resource.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    )}
+                  </div>
+                  <div className="mt-4">
                     <Button
                       variant="outline"
                       className="w-full"
                       onClick={() => handleView(resource)}
                     >
-                      View Resource
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="w-full"
-                      onClick={() => handleDownload(resource)}
-                    >
-                      Download
+                      {isDocumentType(resource.type) ? 'Open Document' : 'Open Resource'}
                     </Button>
                   </div>
                 </CardContent>
@@ -299,11 +332,12 @@ const Resources: React.FC = () => {
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="pdf">PDF</SelectItem>
+                    <SelectItem value="word">Word</SelectItem>
+                    <SelectItem value="excel">Excel</SelectItem>
+                    <SelectItem value="bibtex">BibTeX</SelectItem>
                     <SelectItem value="video">Video</SelectItem>
-                    <SelectItem value="document">Document</SelectItem>
-                    <SelectItem value="quiz">Quiz</SelectItem>
-                    <SelectItem value="assignment">Assignment</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value="link">Link</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
