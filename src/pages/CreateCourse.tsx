@@ -71,6 +71,10 @@ interface Lesson {
   completionCriteria: 'view' | 'quiz' | 'time';
   requiredScore?: number;
   requiredTime?: number;
+  url?: string;
+  publicId?: string;
+  fileName?: string;
+  mimeType?: string;
 }
 
 interface Module {
@@ -253,6 +257,27 @@ const CreateCourse = () => {
       toast({
         title: "Error",
         description: "Please select a difficulty level",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate that there is at least one module with one lesson
+    if (modules.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one module to the course",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if any module has no lessons
+    const emptyModules = modules.filter(module => !module.lessons || module.lessons.length === 0);
+    if (emptyModules.length > 0) {
+      toast({
+        title: "Error",
+        description: `Please add at least one lesson to the following modules: ${emptyModules.map(m => m.title).join(', ')}`,
         variant: "destructive",
       });
       return;
@@ -662,7 +687,13 @@ const CreateCourse = () => {
                                                             i === moduleIndex ? { 
                                                               ...m, 
                                                               lessons: m.lessons.map((l, j) => 
-                                                                j === lessonIndex ? { ...l, type: value } : l
+                                                                j === lessonIndex ? { 
+                                                                  ...l, 
+                                                                  type: value,
+                                                                  content: "", // Reset content when type changes
+                                                                  url: "",
+                                                                  publicId: ""
+                                                                } : l
                                                               ) 
                                                             } : m
                                                           ));
@@ -674,12 +705,90 @@ const CreateCourse = () => {
                                                         <SelectContent>
                                                           <SelectItem value="video">Video</SelectItem>
                                                           <SelectItem value="reading">Reading</SelectItem>
-                                                          <SelectItem value="quiz">Quiz</SelectItem>
                                                           <SelectItem value="assignment">Assignment</SelectItem>
                                                         </SelectContent>
                                                       </Select>
                                                       
-                                                      <div className="flex">
+                                                      {lesson.type === 'assignment' ? (
+                                                        <div className="mt-2">
+                                                          <Textarea
+                                                            placeholder="Enter assignment details and instructions..."
+                                                            className="min-h-[100px] text-sm"
+                                                            value={lesson.content}
+                                                            onChange={(e) => {
+                                                              setModules(prev => prev.map((m, i) => 
+                                                                i === moduleIndex ? { 
+                                                                  ...m, 
+                                                                  lessons: m.lessons.map((l, j) => 
+                                                                    j === lessonIndex ? { 
+                                                                      ...l, 
+                                                                      content: e.target.value
+                                                                    } : l
+                                                                  ) 
+                                                                } : m
+                                                              ));
+                                                            }}
+                                                          />
+                                                        </div>
+                                                      ) : (lesson.type === 'video' || lesson.type === 'reading') && (
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                          <Input
+                                                            type="file"
+                                                            className="h-8 text-xs"
+                                                            accept={lesson.type === 'video' ? 'video/*' : '.pdf,.doc,.docx'}
+                                                            onChange={async (e) => {
+                                                              const file = e.target.files?.[0];
+                                                              if (!file) return;
+
+                                                              try {
+                                                                const formData = new FormData();
+                                                                formData.append('file', file);
+
+                                                                const response = await api.post('/uploads', formData, {
+                                                                  headers: {
+                                                                    'Content-Type': 'multipart/form-data'
+                                                                  }
+                                                                });
+
+                                                                setModules(prev => prev.map((m, i) => 
+                                                                  i === moduleIndex ? { 
+                                                                    ...m, 
+                                                                    lessons: m.lessons.map((l, j) => 
+                                                                      j === lessonIndex ? { 
+                                                                        ...l, 
+                                                                        content: response.data.url,
+                                                                        url: response.data.url,
+                                                                        publicId: response.data.publicId,
+                                                                        fileName: file.name,
+                                                                        mimeType: file.type
+                                                                      } : l
+                                                                    ) 
+                                                                  } : m
+                                                                ));
+
+                                                                toast({
+                                                                  title: "Success",
+                                                                  description: `${lesson.type === 'video' ? 'Video' : 'Document'} uploaded successfully`,
+                                                                });
+                                                              } catch (error) {
+                                                                console.error('File upload error:', error);
+                                                                toast({
+                                                                  title: "Error",
+                                                                  description: error instanceof Error ? error.message : "Failed to upload file",
+                                                                  variant: "destructive",
+                                                                });
+                                                              }
+                                                            }}
+                                                          />
+                                                          {lesson.fileName && (
+                                                            <div className="text-xs text-gray-500">
+                                                              {lesson.fileName}
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      )}
+
+                                                      <div className="flex mt-2">
                                                         <Input 
                                                           type="number"
                                                           className="h-8 text-xs"
@@ -710,7 +819,9 @@ const CreateCourse = () => {
                                             <Button
                                               variant="outline"
                                               size="sm"
-                                              onClick={() => {
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
                                                 setModules(prev => prev.map((m, i) => 
                                                   i === moduleIndex ? { 
                                                     ...m, 

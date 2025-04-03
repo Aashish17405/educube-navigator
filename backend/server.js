@@ -9,6 +9,7 @@ const resourcesRoutes = require('./routes/resources.js');
 const uploadRoutes = require('./routes/uploads.js');
 const dashboardRoutes = require('./routes/dashboard.js');
 const imagekitRoutes = require('./routes/imagekit.js');
+const enrollmentRoutes = require('./routes/enrollments.js');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/resources', resourcesRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/imagekit', imagekitRoutes);
+app.use('/api/enrollments', enrollmentRoutes);
 
 // Log environment variables (without secrets)
 console.log('Environment configuration:', {
@@ -51,6 +53,21 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+
+const startServer = (port) => {
+  const server = app.listen(port)
+    .on('listening', () => {
+      console.log(`Server is running on port ${port}`);
+    })
+    .on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`Port ${port} is busy, trying ${port + 1}...`);
+        server.close();
+        startServer(port + 1);
+      } else {
+        console.error('Server error:', err);
+      }
+    });
+};
+
+startServer(PORT);
