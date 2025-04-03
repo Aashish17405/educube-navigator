@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Timer,
   Trophy,
+  ChevronDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,7 +50,8 @@ import { Label } from "@/components/ui/label";
 import { VisuallyHidden } from "../components/ui/visually-hidden";
 
 interface Resource {
-  id?: string;
+  _id: string; // MongoDB's _id
+  id?: string; // Optional id for backward compatibility
   title: string;
   type: "pdf" | "word" | "excel" | "bibtex" | "link" | "video";
   url: string;
@@ -222,12 +224,15 @@ export default function CourseView() {
 
       setApiState("ok");
     } catch (error) {
-      console.error('Error fetching course:', error);
+      console.error("Error fetching course:", error);
       setApiState("error");
-      setApiErrorDetails(error instanceof Error ? error.message : 'Failed to fetch course');
+      setApiErrorDetails(
+        error instanceof Error ? error.message : "Failed to fetch course"
+      );
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to fetch course",
+        description:
+          error instanceof Error ? error.message : "Failed to fetch course",
         variant: "destructive",
       });
     } finally {
@@ -235,15 +240,39 @@ export default function CourseView() {
     }
   };
 
-  // Fetch course data on mount
+  // Fetch course data on mount and initialize state
   useEffect(() => {
-    fetchCourse();
+    const initializeCourse = async () => {
+      await fetchCourse();
+
+      // Set initial active module and lesson
+      if (course && course.modules.length > 0) {
+        const firstModule = course.modules[0];
+        setActiveModule(firstModule.id);
+
+        if (firstModule.lessons.length > 0) {
+          setActiveLesson(firstModule.lessons[0].id);
+        }
+      }
+    };
+
+    initializeCourse();
   }, [id]);
+
+  // Handle module selection
+  const handleModuleSelect = (moduleId: string) => {
+    setActiveModule(moduleId);
+
+    // Set first lesson of module as active
+    const selectedModule = course?.modules.find((m) => m.id === moduleId);
+    if (selectedModule && selectedModule.lessons.length > 0) {
+      setActiveLesson(selectedModule.lessons[0].id);
+    }
+  };
 
   // Helper function to debug API connectivity
   const debugApiConnection = async () => {
     try {
-
       const testResponse = await fetch("http://localhost:5000/api/courses", {
         method: "GET",
       });
@@ -364,6 +393,7 @@ export default function CourseView() {
             } else {
               // Handle non-JSON responses (like HTML error pages)
               const text = await courseRes.text();
+              console.log(text);
               console.error(
                 "Server returned non-JSON response:",
                 text.substring(0, 100) + "..."
@@ -376,11 +406,23 @@ export default function CourseView() {
 
           // Process course data
           const courseData = await courseRes.json();
+          console.log("Course Data:", courseData);
+
+          // Set active module to first module if none is selected
+          if (!activeModule && courseData.modules.length > 0) {
+            setActiveModule(courseData.modules[0].id);
+
+            // Set active lesson to first lesson if none is selected
+            if (courseData.modules[0].lessons.length > 0) {
+              setActiveLesson(courseData.modules[0].lessons[0].id);
+            }
+          }
+
           setCourse(courseData);
 
           // Now fetch enrollment data
           const enrollmentRes = await fetch(
-            `http://localhost:5000/api/enrollments/${id}/status`,
+            `http://localhost:5000/api/enrollments/status/${id}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -475,9 +517,12 @@ export default function CourseView() {
           }
         });
       });
-      
+
       // Track course-level resources (if they exist)
-      if (enrollment.completedResources && enrollment.completedResources.length > 0) {
+      if (
+        enrollment.completedResources &&
+        enrollment.completedResources.length > 0
+      ) {
         enrollment.completedResources.forEach((resource) => {
           completedResourcesMap[resource.resourceId.toString()] = true;
         });
@@ -638,30 +683,40 @@ export default function CourseView() {
   // Check if all course content is completed
   const isAllContentCompleted = () => {
     if (!enrollment || !course) return false;
-    
+
     // Check if all modules are completed
-    const allModulesCompleted = enrollment.modules.every(module => module.completed);
-    
-    // Check if all lessons in all modules are completed
-    const allLessonsCompleted = enrollment.modules.every(module => 
-      module.lessons.every(lesson => lesson.completed)
+    const allModulesCompleted = enrollment.modules.every(
+      (module) => module.completed
     );
-    
+
+    // Check if all lessons in all modules are completed
+    const allLessonsCompleted = enrollment.modules.every((module) =>
+      module.lessons.every((lesson) => lesson.completed)
+    );
+
     // Check if all resources in all lessons are completed
-    const allLessonResourcesCompleted = enrollment.modules.every(module => 
-      module.lessons.every(lesson => 
-        lesson.resources.every(resource => resource.completed)
+    const allLessonResourcesCompleted = enrollment.modules.every((module) =>
+      module.lessons.every((lesson) =>
+        lesson.resources.every((resource) => resource.completed)
       )
     );
-    
+
     // Check if all course-level resources are completed
     const totalCourseResources = course.resources ? course.resources.length : 0;
-    const completedCourseResources = enrollment.completedResources ? enrollment.completedResources.length : 0;
-    const allCourseResourcesCompleted = totalCourseResources > 0 ? 
-      completedCourseResources === totalCourseResources : true;
-    
-    return allModulesCompleted && allLessonsCompleted && 
-           allLessonResourcesCompleted && allCourseResourcesCompleted;
+    const completedCourseResources = enrollment.completedResources
+      ? enrollment.completedResources.length
+      : 0;
+    const allCourseResourcesCompleted =
+      totalCourseResources > 0
+        ? completedCourseResources === totalCourseResources
+        : true;
+
+    return (
+      allModulesCompleted &&
+      allLessonsCompleted &&
+      allLessonResourcesCompleted &&
+      allCourseResourcesCompleted
+    );
   };
 
   const handleCompleteEntireCourse = async () => {
@@ -670,12 +725,13 @@ export default function CourseView() {
       if (!isAllContentCompleted()) {
         toast({
           title: "Cannot Complete Course",
-          description: "You must complete all modules, lessons, and resources before marking the course as completed.",
+          description:
+            "You must complete all modules, lessons, and resources before marking the course as completed.",
           variant: "destructive",
         });
         return;
       }
-      
+
       setIsCompletingCourse(true);
       const token = getToken();
       const response = await fetch(
@@ -737,8 +793,8 @@ export default function CourseView() {
     // Store the resource info and any provided module/lesson IDs
     const enhancedResource = {
       ...resource,
-      moduleId,  // This might be undefined for course-level resources
-      lessonId   // This might be undefined for course-level resources
+      moduleId, // This might be undefined for course-level resources
+      lessonId, // This might be undefined for course-level resources
     };
 
     setCurrentResource(enhancedResource);
@@ -751,7 +807,10 @@ export default function CourseView() {
       currentResource
     );
 
-    if (!currentResource || !currentResource.id) {
+    // Get the resource ID, preferring _id over id
+    const resourceId = currentResource?._id;
+
+    if (!currentResource || !resourceId) {
       console.error("Missing resource data for completion", {
         currentResource,
       });
@@ -763,9 +822,9 @@ export default function CourseView() {
       });
       return;
     }
-    
+
     // Check if the resource is already completed
-    if (completedResources[currentResource.id]) {
+    if (completedResources[resourceId]) {
       toast({
         title: "Already Completed",
         description: "This resource has already been marked as complete.",
@@ -780,7 +839,7 @@ export default function CourseView() {
     const lessonId = currentResource.lessonId;
 
     try {
-      setCompletingResourceId(currentResource.id);
+      setCompletingResourceId(resourceId);
       const token = getToken();
       if (!token) {
         console.error("No authentication token found");
@@ -806,10 +865,10 @@ export default function CourseView() {
 
       // Prepare request data - only include moduleId and lessonId if they exist
       const requestData: any = {
-        resourceId: currentResource.id,
+        resourceId: resourceId,
         timeSpent,
       };
-      
+
       // Only add moduleId and lessonId if they exist
       if (moduleId) requestData.moduleId = moduleId;
       if (lessonId) requestData.lessonId = lessonId;
@@ -833,10 +892,6 @@ export default function CourseView() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(requestData),
-      });
-      console.log("API response headers:", {
-        contentType: response.headers.get("content-type"),
-        statusText: response.statusText,
       });
 
       // Handle response
@@ -872,10 +927,10 @@ export default function CourseView() {
         // Update local state
         setEnrollment(updatedEnrollment);
 
-        // Update completed resources
+        // Update completed resources immediately
         setCompletedResources((prev) => ({
           ...prev,
-          [currentResource.id || ""]: true,
+          [resourceId]: true,
         }));
 
         // Show success message
@@ -898,7 +953,7 @@ export default function CourseView() {
       console.error("Error in resource completion process:", error);
 
       // Update UI to show completion locally even if server failed
-      if (enrollment && currentResource.id) {
+      if (enrollment && resourceId) {
         // Add time locally
         const updatedTotalTime =
           (enrollment.totalTimeSpent || 0) + (parseInt(resourceTimeInput) || 0);
@@ -917,7 +972,7 @@ export default function CourseView() {
         setEnrollment(tempUpdatedEnrollment);
         setCompletedResources((prev) => ({
           ...prev,
-          [currentResource.id || ""]: true,
+          [resourceId]: true,
         }));
 
         toast({
@@ -942,6 +997,204 @@ export default function CourseView() {
       setCompletingResourceId(null);
       setResourceTimeInput("");
       setCurrentResource(null);
+    }
+  };
+
+  const renderLessonContent = (lesson: any) => {
+    console.log("Rendering lesson content:", lesson);
+
+    if (!lesson) return null;
+
+    // Helper function to find the URL from various possible properties
+    const findUrl = (obj: any): string | null => {
+      // Check all possible property names that might contain a URL
+      const possibleUrlProps = [
+        "url",
+        "contentUrl",
+        "videoUrl",
+        "fileUrl",
+        "src",
+        "resourceUrl",
+        "link",
+      ];
+
+      for (const prop of possibleUrlProps) {
+        if (obj[prop] && typeof obj[prop] === "string") {
+          console.log(`Found URL in property: ${prop}`, obj[prop]);
+          return obj[prop];
+        }
+      }
+
+      // Check if any content property contains a URL string
+      if (
+        obj.content &&
+        typeof obj.content === "string" &&
+        (obj.content.startsWith("http://") ||
+          obj.content.startsWith("https://"))
+      ) {
+        return obj.content;
+      }
+
+      // Check if there's a resources array with URLs
+      if (
+        obj.resources &&
+        Array.isArray(obj.resources) &&
+        obj.resources.length > 0
+      ) {
+        const resource = obj.resources[0];
+        if (resource.url) return resource.url;
+      }
+
+      return null;
+    };
+
+    // Get the URL from the lesson object
+    const lessonUrl = findUrl(lesson);
+    console.log("Found lesson URL:", lessonUrl);
+
+    switch (lesson.type) {
+      case "video":
+        if (!lessonUrl) {
+          console.error("Missing URL for video lesson:", lesson);
+          return (
+            <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+              <p className="text-red-500">Video URL is missing. Debug info:</p>
+              <pre className="mt-2 text-xs overflow-auto max-h-32 bg-gray-100 p-2 rounded">
+                {JSON.stringify(lesson, null, 2)}
+              </pre>
+            </div>
+          );
+        }
+        return (
+          <div className="aspect-w-16 aspect-h-9 bg-gray-100 rounded-lg overflow-hidden">
+            <video
+              src={lessonUrl}
+              controls
+              className="w-full h-full rounded-lg"
+              onTimeUpdate={(e) => {
+                // Handle video progress tracking
+                const video = e.target as HTMLVideoElement;
+                if (video.currentTime >= video.duration * 0.9) {
+                  // Mark as completed when 90% watched
+                  // You can call your completion API here
+                }
+              }}
+            />
+          </div>
+        );
+
+      case "reading":
+        if (!lessonUrl) {
+          console.error("Missing URL for reading lesson:", lesson);
+          return (
+            <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+              <p className="text-red-500">
+                Reading URL is missing. Debug info:
+              </p>
+              <pre className="mt-2 text-xs overflow-auto max-h-32 bg-gray-100 p-2 rounded">
+                {JSON.stringify(lesson, null, 2)}
+              </pre>
+            </div>
+          );
+        }
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(lessonUrl, "_blank")}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open in New Tab
+              </Button>
+            </div>
+            <div className="min-h-[400px] w-full bg-gray-100 rounded-lg overflow-hidden">
+              <iframe
+                src={lessonUrl}
+                className="w-full h-full min-h-[400px] rounded-lg"
+                title={lesson.title}
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+              />
+            </div>
+          </div>
+        );
+
+      case "assignment":
+        if (!lesson.content) {
+          console.error("Missing content for assignment lesson:", lesson);
+          return (
+            <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+              <p className="text-red-500">
+                Assignment content is missing. Debug info:
+              </p>
+              <pre className="mt-2 text-xs overflow-auto max-h-32 bg-gray-100 p-2 rounded">
+                {JSON.stringify(lesson, null, 2)}
+              </pre>
+            </div>
+          );
+        }
+        return (
+          <div className="prose max-w-none">
+            <div className="bg-gray-50 p-4 rounded-lg">{lesson.content}</div>
+          </div>
+        );
+
+      default:
+        console.warn("Unknown lesson type:", lesson.type);
+        // If we have a URL but no specific handler, show a generic viewer
+        if (lessonUrl) {
+          return (
+            <div className="space-y-4">
+              <div className="p-4 border rounded-lg">
+                <h3 className="font-medium mb-2">Lesson Content</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  This content can be viewed externally or in the frame below.
+                </p>
+                <a
+                  href={lessonUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-500 flex items-center"
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Open in New Tab
+                </a>
+              </div>
+
+              <div className="min-h-[400px] w-full bg-gray-100 rounded-lg overflow-hidden">
+                <iframe
+                  src={lessonUrl}
+                  className="w-full h-full min-h-[400px] rounded-lg"
+                  title={lesson.title || "Lesson Content"}
+                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                />
+              </div>
+            </div>
+          );
+        }
+
+        // If we have content but no URL, show the content
+        if (lesson.content) {
+          return (
+            <div className="prose max-w-none">
+              <div className="bg-gray-50 p-4 rounded-lg">{lesson.content}</div>
+            </div>
+          );
+        }
+
+        // Last resort - show the lesson data for debugging
+        return (
+          <div className="p-4 border rounded-lg">
+            <h3 className="font-medium mb-2">Unknown Lesson Format</h3>
+            <p className="text-red-500 mb-2">
+              Could not determine how to display this lesson. Debug info:
+            </p>
+            <pre className="mt-2 text-xs overflow-auto max-h-32 bg-gray-100 p-2 rounded">
+              {JSON.stringify(lesson, null, 2)}
+            </pre>
+          </div>
+        );
     }
   };
 
@@ -1013,49 +1266,6 @@ export default function CourseView() {
     );
   }
 
-  const renderLessonContent = (lesson: any) => {
-    switch (lesson.type) {
-      case 'video':
-        return (
-          <div className="aspect-w-16 aspect-h-9">
-            <video
-              src={lesson.url}
-              controls
-              className="w-full rounded-lg"
-              onTimeUpdate={(e) => {
-                // Handle video progress tracking
-                const video = e.target as HTMLVideoElement;
-                if (video.currentTime >= video.duration * 0.9) {
-                  // Mark as completed when 90% watched
-                  // You can call your completion API here
-                }
-              }}
-            />
-          </div>
-        );
-      case 'reading':
-        return (
-          <div className="min-h-[500px] w-full">
-            <iframe
-              src={lesson.url}
-              className="w-full h-full min-h-[500px] rounded-lg"
-              title={lesson.title}
-            />
-          </div>
-        );
-      case 'assignment':
-        return (
-          <div className="prose max-w-none">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              {lesson.content}
-            </div>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <MainLayout>
       {loading ? (
@@ -1068,41 +1278,141 @@ export default function CourseView() {
         <div className="container mx-auto py-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Course Content */}
-            <div className="md:col-span-2 space-y-6">
+            <div className="md:col-span-2 space-y-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>{course.title}</CardTitle>
-                  <CardDescription>{course.description}</CardDescription>
+                  <CardTitle>Course Content</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {/* Modules Accordion */}
-                  <Accordion type="single" collapsible defaultValue={activeModule || undefined}>
-                    {course.modules.map((module) => (
-                      <AccordionItem key={module.id} value={module.id}>
-                        <AccordionTrigger>
+                  {/* Course Info */}
+                  <div className="mb-6 bg-gray-50 rounded-lg">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>{course.title}</CardTitle>
+                        <CardDescription>{course.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span>{module.title}</span>
-                            {enrollment?.modules.find(m => m.moduleId === module.id)?.completed && (
+                            <Clock className="h-4 w-4" />
+                            <span>
+                              Estimated time: {course.estimatedTotalTime}{" "}
+                              minutes
+                            </span>
+                          </div>
+                          {user && course.instructor.id === user.id ? (
+                            <div className="flex items-center">
+                              <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+                                You are the instructor
+                              </span>
+                            </div>
+                          ) : enrollment ? (
+                            <div className="flex items-center gap-4">
+                              <div className="flex flex-col">
+                                <span className="text-sm text-muted-foreground">
+                                  Progress
+                                </span>
+                                <Progress
+                                  value={enrollment.progress}
+                                  className="w-32 h-2"
+                                />
+                              </div>
+                              <span className="text-sm font-medium">
+                                {Math.round(enrollment.progress)}%
+                              </span>
+                              {!enrollment.completed && (
+                                <Button
+                                  variant="outline"
+                                  onClick={handleCompleteEntireCourse}
+                                  disabled={
+                                    isCompletingCourse ||
+                                    !isAllContentCompleted()
+                                  }
+                                  title={
+                                    !isAllContentCompleted()
+                                      ? "Complete all lessons and resources first"
+                                      : ""
+                                  }
+                                >
+                                  {isCompletingCourse
+                                    ? "Completing..."
+                                    : "Mark Course as Completed"}
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <Button
+                              onClick={handleEnroll}
+                              disabled={isEnrolling}
+                            >
+                              {isEnrolling ? "Enrolling..." : "Enroll Now"}
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Modules List */}
+                  <div className="space-y-6">
+                    {course.modules.map((module) => (
+                      <div
+                        key={module.id}
+                        className="border rounded-lg overflow-hidden"
+                      >
+                        <div
+                          className={`p-4 cursor-pointer flex items-center justify-between ${
+                            activeModule === module.id
+                              ? "bg-blue-50"
+                              : "bg-gray-50"
+                          }`}
+                          onClick={() => handleModuleSelect(module.id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{module.title}</span>
+                            {enrollment?.modules.find(
+                              (m) => m.moduleId === module.id
+                            )?.completed && (
                               <CheckCircle className="h-4 w-4 text-green-500" />
                             )}
                           </div>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="space-y-4 py-2">
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${
+                              activeModule === module.id
+                                ? "transform rotate-180"
+                                : ""
+                            }`}
+                          />
+                        </div>
+
+                        {/* Lessons List */}
+                        {activeModule === module.id && (
+                          <div className="divide-y">
                             {module.lessons.map((lesson) => {
                               const isActive = activeLesson === lesson.id;
-                              const moduleProgress = enrollment?.modules.find(m => m.moduleId === module.id);
-                              const lessonProgress = moduleProgress?.lessons.find(l => l.lessonId === lesson.id);
+                              const moduleProgress = enrollment?.modules.find(
+                                (m) => m.moduleId === module.id
+                              );
+                              const lessonProgress =
+                                moduleProgress?.lessons.find(
+                                  (l) => l.lessonId === lesson.id
+                                );
 
                               return (
                                 <div
                                   key={lesson.id}
-                                  className={`p-4 rounded-lg border ${isActive ? 'bg-gray-50' : ''}`}
+                                  className={`p-4 ${
+                                    isActive ? "bg-blue-50" : ""
+                                  }`}
                                 >
-                                  <div className="flex items-start gap-4">
+                                  <div className="flex items-center justify-between">
                                     <div className="flex-1">
-                                      <h3 className="font-medium">{lesson.title}</h3>
-                                      {isActive && renderLessonContent(lesson)}
+                                      <h3 className="font-medium mb-1">
+                                        {lesson.title}
+                                      </h3>
+                                      <p className="text-sm text-gray-500">
+                                        {lesson.type}
+                                      </p>
                                     </div>
                                     <div className="flex items-center gap-2">
                                       {lessonProgress?.completed ? (
@@ -1111,21 +1421,28 @@ export default function CourseView() {
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          onClick={() => setActiveLesson(lesson.id)}
+                                          onClick={() =>
+                                            setActiveLesson(lesson.id)
+                                          }
                                         >
-                                          Start
+                                          {isActive ? "In Progress" : "Start"}
                                         </Button>
                                       )}
                                     </div>
                                   </div>
+                                  {isActive && (
+                                    <div className="mt-4">
+                                      {renderLessonContent(lesson)}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
                           </div>
-                        </AccordionContent>
-                      </AccordionItem>
+                        )}
+                      </div>
                     ))}
-                  </Accordion>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1156,10 +1473,9 @@ export default function CourseView() {
                         disabled={!isAllContentCompleted()}
                         onClick={handleCompleteEntireCourse}
                       >
-                        {isAllContentCompleted() ? 
-                          'Mark Course as Completed' : 
-                          'Complete all content to finish course'
-                        }
+                        {isAllContentCompleted()
+                          ? "Mark Course as Completed"
+                          : "Complete all content to finish course"}
                       </Button>
                     )}
                   </div>
@@ -1171,319 +1487,95 @@ export default function CourseView() {
       ) : (
         <div className="text-center py-12">
           <h2 className="text-2xl font-semibold mb-2">Course Not Found</h2>
-          <p className="text-gray-600">The course you're looking for doesn't exist or you don't have access to it.</p>
+          <p className="text-gray-600">
+            The course you're looking for doesn't exist or you don't have access
+            to it.
+          </p>
         </div>
       )}
-      <div className="container mx-auto py-6">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Course Overview */}
-          <div className="col-span-12">
-            <Card>
-              <CardHeader>
-                <CardTitle>{course.title}</CardTitle>
-                <CardDescription>{course.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    <span>
-                      Estimated time: {course.estimatedTotalTime} minutes
-                    </span>
-                  </div>
-                  {/* Show different UI based on user role and enrollment status */}
-                  {user && course.instructor.id === user.id ? (
-                    <div className="flex items-center">
-                      <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
-                        You are the instructor
-                      </span>
-                    </div>
-                  ) : enrollment ? (
-                    <div className="flex items-center gap-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm text-muted-foreground">
-                          Progress
-                        </span>
-                        <Progress
-                          value={enrollment.progress}
-                          className="w-32 h-2"
-                        />
-                      </div>
-                      <span className="text-sm font-medium">
-                        {Math.round(enrollment.progress)}%
-                      </span>
-                      {!enrollment.completed && (
-                        <Button
-                          variant="outline"
-                          onClick={handleCompleteEntireCourse}
-                          disabled={isCompletingCourse || !isAllContentCompleted()}
-                          title={!isAllContentCompleted() ? "Complete all lessons and resources first" : ""}
-                        >
-                          {isCompletingCourse
-                            ? "Completing..."
-                            : "Mark Course as Completed"}
-                        </Button>
-                      )}
-                    </div>
-                  ) : (
-                    <Button onClick={handleEnroll} disabled={isEnrolling}>
-                      {isEnrolling ? "Enrolling..." : "Enroll Now"}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Course Content */}
+      <div className="container mx-auto ">
+        <div className="grid grid-cols-12 gap-2">
           <div className="col-span-12 lg:col-span-8">
             <Card className="h-full">
-              <Tabs defaultValue="content" className="h-full">
-                <TabsList>
-                  <TabsTrigger value="content">Content</TabsTrigger>
-                  <TabsTrigger value="resources">Resources</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="content" className="mt-0">
-                  {enrollment && getCurrentLesson() && (
-                    <div className="mb-4 p-4 border rounded-md">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">
-                            Time Spent (minutes)
-                          </label>
-                          <input
-                            type="number"
-                            value={timeSpentInput}
-                            onChange={(e) => setTimeSpentInput(e.target.value)}
-                            className="w-20 px-2 py-1 border rounded-md"
-                            min="0"
-                          />
-                        </div>
-                        <div className="space-x-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              if (
-                                timeSpentInput &&
-                                getCurrentModule() &&
-                                getCurrentLesson()
-                              ) {
-                                updateProgress(
-                                  getCurrentModule().id,
-                                  getCurrentLesson().id,
-                                  parseInt(timeSpentInput),
-                                  false
-                                );
-                                setTimeSpentInput("");
-                              }
-                            }}
-                          >
-                            Log Time
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              if (getCurrentModule() && getCurrentLesson()) {
-                                updateProgress(
-                                  getCurrentModule().id,
-                                  getCurrentLesson().id,
-                                  parseInt(timeSpentInput) || 0,
-                                  true
-                                );
-                                setTimeSpentInput("");
-                              }
-                            }}
-                          >
-                            Mark as Completed
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="p-4">
-                    {getCurrentLesson() ? (
-                      <div className="space-y-4 mt-4">
-                        <h2 className="text-xl font-semibold">
-                          {getCurrentLesson()?.title}
-                        </h2>
-                        <div className="prose max-w-none">
-                          {getCurrentLesson()?.content}
-                        </div>
-                        {getCurrentLesson()?.resources &&
-                          getCurrentLesson()?.resources.length > 0 && (
-                            <div className="mt-6">
-                              <h3 className="text-lg font-semibold mb-2">
-                                Lesson Resources
-                              </h3>
-                              <div className="space-y-3">
-                                {getCurrentLesson()?.resources.map(
-                                  (resource) => (
-                                    <Card
-                                      key={resource.id}
-                                      className="hover:bg-accent/10 transition-colors"
-                                    >
-                                      <CardContent className="p-4">
-                                        <div className="flex items-center gap-3 mb-3">
-                                          {getResourceIcon(resource.type)}
-                                          <div className="flex-1">
-                                            <h4 className="font-medium">
-                                              {resource.title}
-                                            </h4>
-                                            {resource.estimatedTime && (
-                                              <p className="text-sm text-muted-foreground">
-                                                Est. time:{" "}
-                                                {resource.estimatedTime} min
-                                              </p>
-                                            )}
-                                          </div>
-                                          {completedResources[
-                                            resource.id || ""
-                                          ] && (
-                                            <CheckCircle className="h-5 w-5 text-green-500" />
-                                          )}
-                                        </div>
-                                        <div className="flex justify-between gap-2">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="flex-1"
-                                            onClick={() =>
-                                              handleResourceClick(resource)
-                                            }
-                                          >
-                                            View Resource
-                                          </Button>
-                                          {enrollment &&
-                                            !completedResources[
-                                              resource.id || ""
-                                            ] && (
-                                              <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                className="flex items-center gap-1"
-                                                onClick={() =>
-                                                  handleMarkResourceComplete(
-                                                    resource,
-                                                    getCurrentModule().id,
-                                                    getCurrentLesson().id
-                                                  )
-                                                }
-                                                disabled={
-                                                  completingResourceId ===
-                                                  resource.id
-                                                }
-                                              >
-                                                {completingResourceId ===
-                                                resource.id ? (
-                                                  <span className="flex items-center gap-1">
-                                                    <Timer className="h-3.5 w-3.5 animate-spin" />
-                                                    Processing...
-                                                  </span>
-                                                ) : (
-                                                  "Mark as Done"
-                                                )}
-                                              </Button>
-                                            )}
-                                        </div>
-                                      </CardContent>
-                                    </Card>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          )}
-                      </div>
-                    ) : (
-                      <div className="text-center text-muted-foreground">
-                        Select a lesson to begin
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="resources">
-                  <div className="p-4">
-                    <h2 className="text-xl font-semibold mb-4">
-                      Course Resources
-                    </h2>
-                    <div className="space-y-3">
-                      {course.resources.map((resource) => (
-                        <Card
-                          key={resource.id}
-                          className="hover:bg-accent/10 transition-colors"
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-3 mb-3">
-                              {getResourceIcon(resource.type)}
-                              <div className="flex-1">
-                                <h4 className="font-medium">
-                                  {resource.title}
-                                </h4>
-                                {resource.estimatedTime && (
-                                  <p className="text-sm text-muted-foreground">
-                                    Est. time: {resource.estimatedTime} min
-                                  </p>
-                                )}
-                              </div>
-                              {completedResources[resource.id || ""] && (
-                                <CheckCircle className="h-5 w-5 text-green-500" />
+              <CardHeader>
+                <CardTitle>Course Resources</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4">
+                  <div className="space-y-3">
+                    {course.resources.map((resource) => (
+                      <Card
+                        key={resource.id}
+                        className="hover:bg-accent/10 transition-colors"
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3 mb-3">
+                            {getResourceIcon(resource.type)}
+                            <div className="flex-1">
+                              <h4 className="font-medium">{resource.title}</h4>
+                              {resource.estimatedTime && (
+                                <p className="text-sm text-muted-foreground">
+                                  Est. time: {resource.estimatedTime} min
+                                </p>
                               )}
                             </div>
-                            <div className="flex justify-between gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex-1"
-                                onClick={() => handleResourceClick(resource)}
-                              >
-                                View Resource
-                              </Button>
-                              {enrollment && (
-                                completedResources[resource.id || ""] ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="flex items-center gap-1 text-green-600"
-                                    disabled={true}
-                                  >
-                                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                                    Completed
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    className="flex-1"
-                                    onClick={() =>
-                                      handleMarkResourceComplete(
-                                        resource,
-                                        undefined,
-                                        undefined
-                                      )
-                                    }
-                                    disabled={
-                                      completingResourceId === resource.id
-                                    }
-                                  >
-                                    {completingResourceId === resource.id ? (
-                                      <span className="flex items-center gap-1">
-                                        <Timer className="h-3.5 w-3.5 animate-spin" />
-                                        Processing...
-                                      </span>
-                                    ) : (
-                                      "Mark as Done"
-                                    )}
-                                  </Button>
-                                )
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                            {completedResources[resource._id] && (
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                            )}
+                          </div>
+                          <div className="flex justify-between gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => handleResourceClick(resource)}
+                            >
+                              View Resource
+                            </Button>
+                            {enrollment &&
+                              (completedResources[resource._id] ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="flex items-center gap-1 text-green-600"
+                                  disabled={true}
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                                  Completed
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="flex-1"
+                                  onClick={() =>
+                                    handleMarkResourceComplete(
+                                      resource,
+                                      undefined,
+                                      undefined
+                                    )
+                                  }
+                                  disabled={
+                                    completingResourceId === resource._id
+                                  }
+                                >
+                                  {completingResourceId === resource._id ? (
+                                    <span className="flex items-center gap-1">
+                                      <Timer className="h-3.5 w-3.5 animate-spin" />
+                                      Processing...
+                                    </span>
+                                  ) : (
+                                    "Mark as Done"
+                                  )}
+                                </Button>
+                              ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
-                </TabsContent>
-              </Tabs>
+                </div>
+              </CardContent>
             </Card>
           </div>
         </div>
@@ -1502,42 +1594,85 @@ export default function CourseView() {
           </DialogHeader>
           <div className="flex-1 overflow-hidden">
             {selectedResource?.type === "pdf" && (
-              <iframe
-                src={selectedResource.url}
-                className="w-full h-full"
-                title={selectedResource.title}
-              />
+              <div className="h-full flex flex-col">
+                <div className="flex justify-end mb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(selectedResource.url, "_blank")}
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open in New Tab
+                  </Button>
+                </div>
+                <div className="flex-1 bg-gray-50 rounded-lg overflow-hidden">
+                  {selectedResource.url.endsWith(".pdf") ? (
+                    <iframe
+                      src={`${selectedResource.url}#toolbar=0&navpanes=0`}
+                      className="w-full h-full border-0"
+                      title={selectedResource.title}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center p-4">
+                        <p className="mb-4 text-gray-600">
+                          Preview not available
+                        </p>
+                        <Button
+                          onClick={() =>
+                            window.open(selectedResource.url, "_blank")
+                          }
+                        >
+                          Open Document
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
             {(selectedResource?.type === "word" ||
               selectedResource?.type === "excel" ||
               selectedResource?.type === "bibtex") && (
               <div className="flex flex-col items-center justify-center h-full">
-                <p className="mb-4">
+                <p className="mb-4 text-gray-600">
                   This file type cannot be previewed directly.
                 </p>
-                <Button asChild>
-                  <a
-                    href={selectedResource.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
+                <div className="space-x-4">
+                  <Button
+                    onClick={() => window.open(selectedResource.url, "_blank")}
                   >
-                    Download File
-                  </a>
-                </Button>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open in New Tab
+                  </Button>
+                  <Button asChild variant="outline">
+                    <a
+                      href={selectedResource.url}
+                      download
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Download File
+                    </a>
+                  </Button>
+                </div>
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button asChild variant="outline">
-              <a
-                href={selectedResource?.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open in New Tab <ExternalLink className="ml-2 h-4 w-4" />
-              </a>
+          <DialogFooter className="flex justify-between">
+            <Button variant="outline" onClick={() => setSelectedResource(null)}>
+              Close
             </Button>
+            {selectedResource?.type === "pdf" && (
+              <Button asChild>
+                <a
+                  href={selectedResource.url}
+                  download
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Download PDF
+                </a>
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1559,7 +1694,7 @@ export default function CourseView() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              
+
               // Validate time input
               const timeValue = parseInt(resourceTimeInput) || 0;
               if (timeValue <= 0) {
@@ -1570,7 +1705,7 @@ export default function CourseView() {
                 });
                 return;
               }
-              
+
               // All validation passed, proceed with submission
               handleSubmitResourceCompletion();
             }}
@@ -1596,7 +1731,7 @@ export default function CourseView() {
                   onChange={(e) => setResourceTimeInput(e.target.value)}
                   onKeyPress={(e) => {
                     // Allow submission with Enter key
-                    if (e.key === 'Enter') {
+                    if (e.key === "Enter") {
                       e.preventDefault();
                       if (parseInt(resourceTimeInput) > 0) {
                         handleSubmitResourceCompletion();
@@ -1627,7 +1762,9 @@ export default function CourseView() {
               </Button>
               <Button
                 type="submit"
-                disabled={!resourceTimeInput || parseInt(resourceTimeInput) <= 0}
+                disabled={
+                  !resourceTimeInput || parseInt(resourceTimeInput) <= 0
+                }
               >
                 Submit
               </Button>

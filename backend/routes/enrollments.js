@@ -40,6 +40,24 @@ router.post("/:courseId/enroll", verifyToken, async (req, res) => {
   }
 });
 
+// Get enrollment status
+router.get("/status/:courseId", verifyToken, async (req, res) => {
+  try {
+    const enrollment = await Enrollment.findOne({
+      user: req.user._id,
+      course: req.params.courseId
+    });
+
+    if (!enrollment) {
+      return res.status(404).json({ message: "Not enrolled in this course" });
+    }
+
+    res.json(enrollment);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Update lesson progress
 router.post("/:courseId/progress", verifyToken, async (req, res) => {
   try {
