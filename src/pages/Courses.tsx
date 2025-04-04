@@ -1,14 +1,38 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { FileText, GraduationCap, Users, Video, ImageIcon } from "lucide-react";
+import {
+  FileText,
+  GraduationCap,
+  Users,
+  Video,
+  ImageIcon,
+  Trash2,
+} from "lucide-react";
 import { courseService } from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Course {
   _id: string;
@@ -36,6 +60,8 @@ interface Course {
 export default function Courses() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -76,21 +102,55 @@ export default function Courses() {
     }
   };
 
+  const handleDeleteCourse = async (courseId: string) => {
+    setCourseToDelete(courseId);
+  };
+
+  const confirmDeleteCourse = async () => {
+    if (!courseToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await courseService.deleteCourse(courseToDelete);
+
+      // Update the local state to remove the deleted course
+      setCourses((prevCourses) =>
+        prevCourses.filter((course) => course._id !== courseToDelete)
+      );
+
+      toast({
+        title: "Success",
+        description: "Course deleted successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete course",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setCourseToDelete(null);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
-              {user?.role === 'instructor' ? 'My Created Courses' : 'Available Courses'}
+              {user?.role === "instructor"
+                ? "My Created Courses"
+                : "Available Courses"}
             </h1>
             <p className="text-muted-foreground">
-              {user?.role === 'instructor' 
-                ? 'Manage your courses and track student progress'
-                : 'Browse courses and continue your learning journey'}
+              {user?.role === "instructor"
+                ? "Manage your courses and track student progress"
+                : "Browse courses and continue your learning journey"}
             </p>
           </div>
-          {user?.role === 'instructor' && (
+          {user?.role === "instructor" && (
             <Button asChild>
               <Link to="/create-course" className="flex items-center gap-2">
                 <GraduationCap className="h-4 w-4" />
@@ -109,11 +169,11 @@ export default function Courses() {
             <GraduationCap className="h-12 w-12 text-muted-foreground" />
             <h2 className="mt-4 text-xl font-semibold">No courses yet</h2>
             <p className="mt-2 text-center text-muted-foreground">
-              {user?.role === 'instructor'
+              {user?.role === "instructor"
                 ? "You haven't created any courses yet. Create your first course to get started."
                 : "No courses available yet. Check back later for new courses."}
             </p>
-            {user?.role === 'instructor' && (
+            {user?.role === "instructor" && (
               <Button asChild className="mt-4">
                 <Link to="/create-course">Create Course</Link>
               </Button>
@@ -139,7 +199,9 @@ export default function Courses() {
                   </div>
                   <CardHeader>
                     <CardTitle>{course.title}</CardTitle>
-                    <CardDescription className="line-clamp-2">{course.description}</CardDescription>
+                    <CardDescription className="line-clamp-2">
+                      {course.description}
+                    </CardDescription>
                   </CardHeader>
                 </Link>
                 <CardContent className="flex-grow">
@@ -161,25 +223,37 @@ export default function Courses() {
                     )}
                   </div>
                 </CardContent>
-                <CardFooter>
-                  {user?.role === 'learner' && !course.isEnrolled && (
-                    <Button 
-                      className="w-full" 
+                <CardFooter className="flex flex-col space-y-2">
+                  {user?.role === "learner" && !course.isEnrolled && (
+                    <Button
+                      className="w-full"
                       onClick={() => handleEnroll(course._id)}
                     >
                       Enroll Now
                     </Button>
                   )}
-                  {(user?.role === 'instructor' || course.isEnrolled) && (
-                    <Button 
-                      variant="outline" 
-                      className="w-full"
-                      asChild
-                    >
-                      <Link to={`/courses/${course._id}`}>
-                        {user?.role === 'instructor' ? 'Manage Course' : 'Continue Learning'}
-                      </Link>
-                    </Button>
+                  {(user?.role === "instructor" || course.isEnrolled) && (
+                    <div className="w-full flex flex-col gap-2">
+                      <Button variant="outline" className="w-full" asChild>
+                        <Link to={`/courses/${course._id}`}>
+                          {user?.role === "instructor"
+                            ? "Manage Course"
+                            : "Continue Learning"}
+                        </Link>
+                      </Button>
+
+                      {user?.role === "instructor" &&
+                        user?.id === course.instructor._id && (
+                          <Button
+                            variant="destructive"
+                            className="w-full"
+                            onClick={() => handleDeleteCourse(course._id)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Course
+                          </Button>
+                        )}
+                    </div>
                   )}
                 </CardFooter>
               </Card>
@@ -187,6 +261,33 @@ export default function Courses() {
           </div>
         )}
       </div>
+
+      {/* Delete Course Confirmation Dialog */}
+      <AlertDialog
+        open={!!courseToDelete}
+        onOpenChange={(open) => !open && setCourseToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the
+              course and all associated data including student enrollments and
+              progress.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteCourse}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete Course"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MainLayout>
   );
 }

@@ -79,7 +79,8 @@ interface Quiz {
 }
 
 interface Lesson {
-  id: string;
+  _id: string;
+  id?: string;
   title: string;
   type: "video" | "quiz" | "reading" | "assignment";
   content: string;
@@ -92,7 +93,8 @@ interface Lesson {
 }
 
 interface Module {
-  id: string;
+  _id: string;
+  id?: string;
   title: string;
   description: string;
   lessons: Lesson[];
@@ -579,22 +581,27 @@ export default function CourseView() {
   ) => {
     try {
       const token = getToken();
-      const response = await fetch(
-        `http://localhost:5000/api/enrollments/${id}/progress`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            moduleId,
-            lessonId,
-            timeSpent,
-            completed,
-          }),
-        }
+
+      // Always use the progress endpoint
+      const endpoint = `http://localhost:5000/api/enrollments/${id}/progress`;
+
+      console.log(
+        `Calling progress API endpoint: ${endpoint} with moduleId=${moduleId}, lessonId=${lessonId}, completed=${completed}`
       );
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          moduleId,
+          lessonId,
+          timeSpent,
+          completed,
+        }),
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -616,6 +623,7 @@ export default function CourseView() {
         });
       }
     } catch (error) {
+      console.error("Error updating progress:", error);
       toast({
         title: "Error",
         description:
@@ -628,6 +636,112 @@ export default function CourseView() {
   const handleLessonClick = (moduleId: string, lessonId: string) => {
     setActiveModule(moduleId);
     setActiveLesson(lessonId);
+  };
+
+  // Add this function to mark a lesson as completed
+  const handleMarkLessonCompleted = async (
+    moduleId: string,
+    lessonId: string
+  ) => {
+    try {
+      console.log("Marking lesson as completed:", { moduleId, lessonId });
+
+      const token = getToken();
+      if (!token) {
+        console.error("No authentication token found");
+        toast({
+          title: "Authentication Error",
+          description: "Please log in again to continue.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Show immediate feedback
+      toast({
+        title: "Processing...",
+        description: "Marking lesson as complete...",
+      });
+
+      // Use the progress endpoint which is known to exist
+      const apiUrl = `http://localhost:5000/api/enrollments/${id}/progress`;
+
+      const requestData = {
+        moduleId,
+        lessonId,
+        timeSpent: 0,
+        completed: true,
+      };
+
+      console.log("API request payload:", requestData);
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      // Handle response
+      if (!response.ok) {
+        let errorMessage = `Server error (${response.status})`;
+
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          try {
+            const errorData = await response.json();
+            console.error("API error response:", errorData);
+            errorMessage = errorData.message || errorMessage;
+          } catch (e) {
+            console.error("Failed to parse error response as JSON:", e);
+          }
+        } else {
+          const errorText = await response.text();
+          console.error("API error response (text):", errorText);
+          errorMessage = errorText || errorMessage;
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      // Process successful response
+      try {
+        const updatedEnrollment = await response.json();
+        console.log(
+          "Lesson completion successful, updated enrollment:",
+          updatedEnrollment
+        );
+
+        // Update local state
+        setEnrollment(updatedEnrollment);
+
+        // Show success message
+        toast({
+          title: "Lesson Completed",
+          description: "You have successfully completed this lesson.",
+        });
+      } catch (e) {
+        console.error("Error parsing successful response:", e);
+        toast({
+          title: "Warning",
+          description:
+            "Lesson marked as complete, but there was an issue updating the UI.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error in lesson completion process:", error);
+      toast({
+        title: "Operation Failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to mark lesson as complete.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getResourceIcon = (type: Resource["type"]) => {
@@ -1341,12 +1455,13 @@ export default function CourseView() {
                               )}
                             </div>
                           ) : (
-                            <Button
+                            user && user.role === "learner" ? (
+                              <Button
                               onClick={handleEnroll}
                               disabled={isEnrolling}
                             >
                               {isEnrolling ? "Enrolling..." : "Enroll Now"}
-                            </Button>
+                            </Button>) : null
                           )}
                         </div>
                       </CardContent>
@@ -1376,31 +1491,24 @@ export default function CourseView() {
                               <CheckCircle className="h-4 w-4 text-green-500" />
                             )}
                           </div>
-                          <ChevronDown
-                            className={`h-4 w-4 transition-transform ${
-                              activeModule === module.id
-                                ? "transform rotate-180"
-                                : ""
-                            }`}
-                          />
                         </div>
 
                         {/* Lessons List */}
                         {activeModule === module.id && (
                           <div className="divide-y">
                             {module.lessons.map((lesson) => {
-                              const isActive = activeLesson === lesson.id;
+                              const isActive = activeLesson === lesson._id;
                               const moduleProgress = enrollment?.modules.find(
-                                (m) => m.moduleId === module.id
+                                (m) => m.moduleId === module._id
                               );
                               const lessonProgress =
                                 moduleProgress?.lessons.find(
-                                  (l) => l.lessonId === lesson.id
+                                  (l) => l.lessonId === lesson._id
                                 );
 
                               return (
                                 <div
-                                  key={lesson.id}
+                                  key={lesson._id}
                                   className={`p-4 ${
                                     isActive ? "bg-blue-50" : ""
                                   }`}
@@ -1418,21 +1526,51 @@ export default function CourseView() {
                                       {lessonProgress?.completed ? (
                                         <CheckCircle className="h-5 w-5 text-green-500" />
                                       ) : (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() =>
-                                            setActiveLesson(lesson.id)
-                                          }
-                                        >
-                                          {isActive ? "In Progress" : "Start"}
-                                        </Button>
+                                        <>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                              setActiveLesson(lesson._id)
+                                            }
+                                          >
+                                            {isActive ? "In Progress" : "Start"}
+                                          </Button>
+                                          {isActive && (
+                                            <Button
+                                              variant="secondary"
+                                              size="sm"
+                                              onClick={() =>
+                                                handleMarkLessonCompleted(
+                                                  module._id,
+                                                  lesson._id
+                                                )
+                                              }
+                                            >
+                                              Mark as Completed
+                                            </Button>
+                                          )}
+                                        </>
                                       )}
                                     </div>
                                   </div>
                                   {isActive && (
                                     <div className="mt-4">
                                       {renderLessonContent(lesson)}
+                                      {!lessonProgress?.completed && (
+                                        <div className="mt-4 flex justify-end">
+                                          <Button
+                                            onClick={() =>
+                                              handleMarkLessonCompleted(
+                                                module._id,
+                                                lesson._id
+                                              )
+                                            }
+                                          >
+                                            Mark Lesson as Completed
+                                          </Button>
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -1458,7 +1596,7 @@ export default function CourseView() {
                     <div>
                       <div className="flex justify-between text-sm mb-2">
                         <span>Overall Progress</span>
-                        <span>{enrollment?.progress || 0}%</span>
+                        <span>{enrollment?.progress.toFixed(2) || 0}%</span>
                       </div>
                       <Progress value={enrollment?.progress || 0} />
                     </div>

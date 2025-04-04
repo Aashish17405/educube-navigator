@@ -1,25 +1,36 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Input } from '../ui/input';
-import { Button } from '../ui/button';
-import { Alert, AlertDescription } from '../ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { useAuth } from '../../contexts/AuthContext';
-import { SidebarHeader, SidebarTrigger } from '../ui/sidebar';
-import logo from "../../assets/OIP-removebg-preview.png"
-
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../ui/card";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { Alert, AlertDescription } from "../ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { useAuth } from "../../contexts/AuthContext";
+import { SidebarHeader, SidebarTrigger } from "../ui/sidebar";
+import logo from "../../assets/OIP-removebg-preview.png";
 
 export default function SignUp() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    role: '',
+    username: "",
+    email: "",
+    password: "",
+    role: "",
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,13 +44,13 @@ export default function SignUp() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
+      const response = await fetch("http://localhost:5000/api/auth/register", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(formData),
       });
@@ -47,17 +58,17 @@ export default function SignUp() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to sign up');
+        throw new Error(data.message || "Failed to sign up");
       }
 
       // Use the login function from auth context
       login(data.token, data.user);
 
       // Redirect based on role
-      if (data.user.role === 'learner') {
-        navigate('/courses');
+      if (data.user.role === "instructor") {
+        navigate("/instructor/dashboard");
       } else {
-        navigate('/create-course');
+        navigate("/");
       }
     } catch (err: any) {
       setError(err.message);
@@ -77,7 +88,9 @@ export default function SignUp() {
             </div>
           </CardTitle>
           <CardDescription className="ml-2">
-          <h3 className="text-2xl font-semibold mt-2 text-black">Create your account</h3>
+            <h3 className="text-2xl font-semibold mt-2 text-black">
+              Create your account
+            </h3>
             Sign up to start learning or teaching
           </CardDescription>
         </CardHeader>
@@ -132,16 +145,18 @@ export default function SignUp() {
                 </SelectContent>
               </Select>
             </div>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Signing up...' : 'Sign up'}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Signing up..." : "Sign up"}
             </Button>
           </form>
           <div className="text-center mt-4">
-            Already have an account? <Link to="/signin" className="text-primary-600 underline decoration-primary-600">Sign in</Link>
+            Already have an account?{" "}
+            <Link
+              to="/signin"
+              className="text-primary-600 underline decoration-primary-600"
+            >
+              Sign in
+            </Link>
           </div>
         </CardContent>
       </Card>

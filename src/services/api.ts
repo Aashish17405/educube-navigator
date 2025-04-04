@@ -93,6 +93,12 @@ export const courseService = {
     return response.data;
   },
 
+  // Delete a course (instructors only)
+  deleteCourse: async (courseId: string) => {
+    const response = await api.delete(`/courses/${courseId}`);
+    return response.data;
+  },
+
   // Enroll in a course (learners only)
   enrollInCourse: async (courseId: string) => {
     const response = await api.post(`/courses/${courseId}/enroll`);
