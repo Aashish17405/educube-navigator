@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'https://educube-navigator.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -114,6 +114,44 @@ export const courseService = {
   // Update course progress (learners only)
   updateProgress: async (courseId: string, progressData: any) => {
     const response = await api.put(`/courses/${courseId}/progress`, progressData);
+    return response.data;
+  }
+};
+
+export const enrollmentService = {
+  // Enroll in a course
+  enrollInCourse: async (courseId: string) => {
+    const response = await api.post(`/enrollments/${courseId}/enroll`);
+    return response.data;
+  },
+
+  // Get all enrollments for dashboard
+  getEnrollments: async () => {
+    const response = await api.get('/enrollments/dashboard');
+    return response.data;
+  },
+
+  // Get enrollment status for a course
+  getEnrollmentStatus: async (courseId: string) => {
+    const response = await api.get(`/enrollments/${courseId}/status`);
+    return response.data;
+  },
+
+  // Update lesson progress
+  updateProgress: async (courseId: string, progressData: any) => {
+    const response = await api.post(`/enrollments/${courseId}/progress`, progressData);
+    return response.data;
+  },
+
+  // Mark resource as completed
+  completeResource: async (courseId: string, resourceData: any) => {
+    const response = await api.post(`/enrollments/${courseId}/resource-complete`, resourceData);
+    return response.data;
+  },
+
+  // Mark entire course as completed
+  completeCourse: async (courseId: string) => {
+    const response = await api.post(`/enrollments/${courseId}/complete`);
     return response.data;
   }
 };

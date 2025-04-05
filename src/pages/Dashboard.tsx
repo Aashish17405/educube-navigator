@@ -14,6 +14,7 @@ import { Clock, BookOpen, Trophy, Timer, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
+import { courseService, enrollmentService } from "@/services/api";
 
 interface Course {
   _id: string;
@@ -96,32 +97,11 @@ export default function Dashboard() {
         const token = getToken();
         if (!token) throw new Error("No authentication token found");
 
-        // Fetch enrollments
-        const enrollmentsResponse = await fetch(
-          "http://localhost:5000/api/enrollments/dashboard",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        // Fetch enrollments using the enrollmentService
+        const enrollments = await enrollmentService.getEnrollments();
 
-        // Fetch available courses
-        const coursesResponse = await fetch(
-          "http://localhost:5000/api/courses",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (!enrollmentsResponse.ok || !coursesResponse.ok) {
-          throw new Error("Failed to fetch dashboard data");
-        }
-
-        const enrollments = await enrollmentsResponse.json();
-        const courses = await coursesResponse.json();
+        // Fetch available courses using the courseService
+        const courses = await courseService.getCourses();
 
         // Calculate stats
         const totalTimeSpent = enrollments.reduce(

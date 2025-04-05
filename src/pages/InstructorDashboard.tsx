@@ -79,7 +79,7 @@ export default function InstructorDashboard() {
 
         // Fetch instructor's courses
         const coursesResponse = await fetch(
-          "http://localhost:5000/api/courses/instructor",
+          "https://educube-navigator.onrender.com/api/courses/instructor",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -89,7 +89,7 @@ export default function InstructorDashboard() {
 
         // Fetch instructor dashboard stats
         const statsResponse = await fetch(
-          "http://localhost:5000/api/courses/instructor/stats",
+          "https://educube-navigator.onrender.com/api/courses/instructor/stats",
           {
             headers: {
               Authorization: `Bearer ${token}`,

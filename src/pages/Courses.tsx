@@ -20,7 +20,7 @@ import {
   ImageIcon,
   Trash2,
 } from "lucide-react";
-import { courseService } from "@/services/api";
+import { courseService, enrollmentService } from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -156,26 +156,9 @@ export default function Courses() {
       }
 
       setEnrollingCourseId(courseId);
-      const token = getToken();
 
-      // Use the same API endpoint pattern as CourseView.tsx
-      const response = await fetch(
-        `http://localhost:5000/api/enrollments/${courseId}/enroll`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to enroll in course");
-      }
-
-      const enrollmentData = await response.json();
+      // Use the enrollmentService API to enroll the user
+      const enrollmentData = await enrollmentService.enrollInCourse(courseId);
 
       // Update the course in the local state to reflect enrollment
       setCourses((prevCourses) =>
@@ -242,164 +225,168 @@ export default function Courses() {
 
   return (
     <MainLayout>
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              {user?.role === "instructor"
-                ? "My Created Courses"
-                : "Available Courses"}
-            </h1>
-            <p className="text-muted-foreground">
-              {user?.role === "instructor"
-                ? "Manage your courses and track student progress"
-                : "Browse courses and continue your learning journey"}
-            </p>
-          </div>
-          {user?.role === "instructor" && (
-            <Button asChild>
-              <Link to="/create-course" className="flex items-center gap-2">
-                <GraduationCap className="h-4 w-4" />
-                Create Course
-              </Link>
-            </Button>
-          )}
+      {loading ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
         </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center p-12">
-            <span className="loading loading-spinner loading-lg"></span>
-          </div>
-        ) : courses.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 border rounded-lg bg-muted/20">
-            <GraduationCap className="h-12 w-12 text-muted-foreground" />
-            <h2 className="mt-4 text-xl font-semibold">No courses yet</h2>
-            <p className="mt-2 text-center text-muted-foreground">
-              {user?.role === "instructor"
-                ? "You haven't created any courses yet. Create your first course to get started."
-                : "No courses available yet. Check back later for new courses."}
-            </p>
+      ) : (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">
+                {user?.role === "instructor"
+                  ? "My Created Courses"
+                  : "Available Courses"}
+              </h1>
+              <p className="text-muted-foreground">
+                {user?.role === "instructor"
+                  ? "Manage your courses and track student progress"
+                  : "Browse courses and continue your learning journey"}
+              </p>
+            </div>
             {user?.role === "instructor" && (
-              <Button asChild className="mt-4">
-                <Link to="/create-course">Create Course</Link>
+              <Button asChild>
+                <Link to="/create-course" className="flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4" />
+                  Create Course
+                </Link>
               </Button>
             )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {courses.map((course) => (
-              <Card key={course._id} className="flex flex-col">
-                <Link to={`/courses/${course._id}`}>
-                  <div className="relative aspect-video w-full overflow-hidden rounded-t-lg">
-                    {course.thumbnail ? (
-                      <img
-                        src={course.thumbnail.url}
-                        alt={course.title}
-                        className="object-cover w-full h-full"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center w-full h-full bg-muted">
-                        <ImageIcon className="h-12 w-12 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                  <CardHeader>
-                    <CardTitle>{course.title}</CardTitle>
-                    <CardDescription className="line-clamp-2">
-                      {course.description}
-                    </CardDescription>
-                  </CardHeader>
-                </Link>
-                <CardContent className="flex-grow">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        <span className="text-sm text-muted-foreground">
-                          <span className="font-medium">
-                            {course.actualEnrollmentCount !== undefined
-                              ? course.actualEnrollmentCount
-                              : course.enrolledStudents?.length || 0}
-                          </span>{" "}
-                          learners enrolled
-                        </span>
-                      </div>
-                      {isUserEnrolledInCourse(course) && (
-                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
-                          Enrolled
-                        </Badge>
+
+          {courses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 border rounded-lg bg-muted/20">
+              <GraduationCap className="h-12 w-12 text-muted-foreground" />
+              <h2 className="mt-4 text-xl font-semibold">No courses yet</h2>
+              <p className="mt-2 text-center text-muted-foreground">
+                {user?.role === "instructor"
+                  ? "You haven't created any courses yet. Create your first course to get started."
+                  : "No courses available yet. Check back later for new courses."}
+              </p>
+              {user?.role === "instructor" && (
+                <Button asChild className="mt-4">
+                  <Link to="/create-course">Create Course</Link>
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {courses.map((course) => (
+                <Card key={course._id} className="flex flex-col">
+                  <Link to={`/courses/${course._id}`}>
+                    <div className="relative aspect-video w-full overflow-hidden rounded-t-lg">
+                      {course.thumbnail ? (
+                        <img
+                          src={course.thumbnail.url}
+                          alt={course.title}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full bg-muted">
+                          <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                        </div>
                       )}
                     </div>
-                    {course.progress !== undefined && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>Progress</span>
-                          <span>{Math.round(course.progress)}%</span>
+                    <CardHeader>
+                      <CardTitle>{course.title}</CardTitle>
+                      <CardDescription className="line-clamp-2">
+                        {course.description}
+                      </CardDescription>
+                    </CardHeader>
+                  </Link>
+                  <CardContent className="flex-grow">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          <span className="text-sm text-muted-foreground">
+                            <span className="font-medium">
+                              {course.actualEnrollmentCount !== undefined
+                                ? course.actualEnrollmentCount
+                                : course.enrolledStudents?.length || 0}
+                            </span>{" "}
+                            learners enrolled
+                          </span>
                         </div>
-                        <Progress value={course.progress} />
+                        {isUserEnrolledInCourse(course) && (
+                          <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+                            Enrolled
+                          </Badge>
+                        )}
                       </div>
+                      {course.progress !== undefined && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Progress</span>
+                            <span>{Math.round(course.progress)}%</span>
+                          </div>
+                          <Progress value={course.progress} />
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                  <CardFooter className="flex flex-col space-y-2">
+                    {user?.role === "learner" && (
+                      <>
+                        {isUserEnrolledInCourse(course) ? (
+                          // Show the "Continue Learning" button for enrolled courses
+                          <Button variant="outline" className="w-full" asChild>
+                            <Link to={`/courses/${course._id}`}>
+                              Continue Learning
+                            </Link>
+                          </Button>
+                        ) : (
+                          // Show "Enroll Now" button only if not enrolled
+                          <Button
+                            className="w-full"
+                            onClick={() => handleEnroll(course._id)}
+                            disabled={
+                              enrollingCourseId === course._id ||
+                              isUserEnrolledInCourse(course)
+                            }
+                          >
+                            {enrollingCourseId === course._id ? (
+                              <div className="flex items-center justify-center">
+                                <span className="mr-2 animate-spin">↻</span>
+                                Enrolling...
+                              </div>
+                            ) : isUserEnrolledInCourse(course) ? (
+                              "Already Enrolled"
+                            ) : (
+                              "Enroll Now"
+                            )}
+                          </Button>
+                        )}
+                      </>
                     )}
-                  </div>
-                </CardContent>
-                <CardFooter className="flex flex-col space-y-2">
-                  {user?.role === "learner" && (
-                    <>
-                      {isUserEnrolledInCourse(course) ? (
-                        // Show the "Continue Learning" button for enrolled courses
+
+                    {user?.role === "instructor" && (
+                      <div className="w-full flex flex-col gap-2">
                         <Button variant="outline" className="w-full" asChild>
                           <Link to={`/courses/${course._id}`}>
-                            Continue Learning
+                            Manage Course
                           </Link>
                         </Button>
-                      ) : (
-                        // Show "Enroll Now" button only if not enrolled
-                        <Button
-                          className="w-full"
-                          onClick={() => handleEnroll(course._id)}
-                          disabled={
-                            enrollingCourseId === course._id ||
-                            isUserEnrolledInCourse(course)
-                          }
-                        >
-                          {enrollingCourseId === course._id ? (
-                            <div className="flex items-center justify-center">
-                              <span className="mr-2 animate-spin">↻</span>
-                              Enrolling...
-                            </div>
-                          ) : isUserEnrolledInCourse(course) ? (
-                            "Already Enrolled"
-                          ) : (
-                            "Enroll Now"
-                          )}
-                        </Button>
-                      )}
-                    </>
-                  )}
 
-                  {user?.role === "instructor" && (
-                    <div className="w-full flex flex-col gap-2">
-                      <Button variant="outline" className="w-full" asChild>
-                        <Link to={`/courses/${course._id}`}>Manage Course</Link>
-                      </Button>
-
-                      {user.id === course.instructor._id && (
-                        <Button
-                          variant="destructive"
-                          className="w-full"
-                          onClick={() => handleDeleteCourse(course._id)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete Course
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                        {user.id === course.instructor._id && (
+                          <Button
+                            variant="destructive"
+                            className="w-full"
+                            onClick={() => handleDeleteCourse(course._id)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Course
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Delete Course Confirmation Dialog */}
       <AlertDialog

@@ -48,6 +48,7 @@ import { formatTime } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VisuallyHidden } from "../components/ui/visually-hidden";
+import { courseService, enrollmentService } from "@/services/api";
 
 interface Resource {
   _id: string; // MongoDB's _id
@@ -188,6 +189,8 @@ export default function CourseView() {
     "unknown"
   );
   const [apiErrorDetails, setApiErrorDetails] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(true);
+  const [resourcePdfLoading, setResourcePdfLoading] = useState(true);
 
   // Fetch course data
   const fetchCourse = async () => {
@@ -538,7 +541,7 @@ export default function CourseView() {
       setIsEnrolling(true);
       const token = getToken();
       const response = await fetch(
-        `http://localhost:5000/api/enrollments/${id}/enroll`,
+        `https://educube-navigator.onrender.com/api/enrollments/${id}/enroll`,
         {
           method: "POST",
           headers: {
@@ -580,35 +583,21 @@ export default function CourseView() {
     completed: boolean
   ) => {
     try {
-      const token = getToken();
-
-      // Always use the progress endpoint
-      const endpoint = `http://localhost:5000/api/enrollments/${id}/progress`;
-
       console.log(
-        `Calling progress API endpoint: ${endpoint} with moduleId=${moduleId}, lessonId=${lessonId}, completed=${completed}`
+        `Updating progress with moduleId=${moduleId}, lessonId=${lessonId}, completed=${completed}`
       );
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          moduleId,
-          lessonId,
-          timeSpent,
-          completed,
-        }),
-      });
+      const progressData = {
+        moduleId,
+        lessonId,
+        timeSpent,
+        completed,
+      };
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update progress");
-      }
-
-      const updatedEnrollment = await response.json();
+      const updatedEnrollment = await enrollmentService.updateProgress(
+        id,
+        progressData
+      );
       setEnrollment(updatedEnrollment);
 
       if (completed) {
@@ -646,91 +635,40 @@ export default function CourseView() {
     try {
       console.log("Marking lesson as completed:", { moduleId, lessonId });
 
-      const token = getToken();
-      if (!token) {
-        console.error("No authentication token found");
-        toast({
-          title: "Authentication Error",
-          description: "Please log in again to continue.",
-          variant: "destructive",
-        });
-        return;
-      }
-
       // Show immediate feedback
       toast({
         title: "Processing...",
         description: "Marking lesson as complete...",
       });
 
-      // Use the progress endpoint which is known to exist
-      const apiUrl = `http://localhost:5000/api/enrollments/${id}/progress`;
-
-      const requestData = {
+      const progressData = {
         moduleId,
         lessonId,
         timeSpent: 0,
         completed: true,
       };
 
-      console.log("API request payload:", requestData);
+      console.log("API request payload:", progressData);
 
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(requestData),
+      // Use enrollmentService to update progress
+      const updatedEnrollment = await enrollmentService.updateProgress(
+        id,
+        progressData
+      );
+
+      console.log(
+        "Lesson completion successful, updated enrollment:",
+        updatedEnrollment
+      );
+
+      // Update local state
+      setEnrollment(updatedEnrollment);
+
+      // Show success message
+      toast({
+        title: "Lesson Completed",
+        description: "You have successfully completed this lesson.",
       });
-
-      // Handle response
-      if (!response.ok) {
-        let errorMessage = `Server error (${response.status})`;
-
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          try {
-            const errorData = await response.json();
-            console.error("API error response:", errorData);
-            errorMessage = errorData.message || errorMessage;
-          } catch (e) {
-            console.error("Failed to parse error response as JSON:", e);
-          }
-        } else {
-          const errorText = await response.text();
-          console.error("API error response (text):", errorText);
-          errorMessage = errorText || errorMessage;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      // Process successful response
-      try {
-        const updatedEnrollment = await response.json();
-        console.log(
-          "Lesson completion successful, updated enrollment:",
-          updatedEnrollment
-        );
-
-        // Update local state
-        setEnrollment(updatedEnrollment);
-
-        // Show success message
-        toast({
-          title: "Lesson Completed",
-          description: "You have successfully completed this lesson.",
-        });
-      } catch (e) {
-        console.error("Error parsing successful response:", e);
-        toast({
-          title: "Warning",
-          description:
-            "Lesson marked as complete, but there was an issue updating the UI.",
-          variant: "destructive",
-        });
-      }
     } catch (error) {
       console.error("Error in lesson completion process:", error);
       toast({
@@ -849,7 +787,7 @@ export default function CourseView() {
       setIsCompletingCourse(true);
       const token = getToken();
       const response = await fetch(
-        `http://localhost:5000/api/enrollments/${id}/complete`,
+        `https://educube-navigator.onrender.com/api/enrollments/${id}/complete`,
         {
           method: "POST",
           headers: {
@@ -916,201 +854,61 @@ export default function CourseView() {
   };
 
   const handleSubmitResourceCompletion = async () => {
-    console.log(
-      "handleSubmitResourceCompletion called with resource:",
-      currentResource
-    );
+    if (!resourceTimeInput || !currentResource) {
+      return;
+    }
 
-    // Get the resource ID, preferring _id over id
-    const resourceId = currentResource?._id;
+    try {
+      setCompletingResourceId(currentResource._id);
 
-    if (!currentResource || !resourceId) {
-      console.error("Missing resource data for completion", {
-        currentResource,
+      const timeSpent = parseInt(resourceTimeInput);
+      const resourceId = currentResource._id || currentResource.id;
+
+      if (!resourceId) {
+        throw new Error("Missing resource data");
+      }
+
+      // Get module and lesson info if available from active state
+      const resourceData = {
+        resourceId,
+        timeSpent: timeSpent,
+        moduleId: activeModule,
+        lessonId: activeLesson,
+      };
+
+      // Call the API to mark the resource as completed
+      const updatedEnrollment = await enrollmentService.completeResource(
+        id,
+        resourceData
+      );
+
+      // Update UI state
+      setCompletedResources((prev) => ({
+        ...prev,
+        [resourceId]: true,
+      }));
+
+      setResourceTimeInput("");
+      setShowTimeInput(false);
+      setCurrentResource(null);
+
+      // Show success message
+      toast({
+        title: "Resource Completed",
+        description: `You've completed this resource and logged ${timeSpent} minutes.`,
       });
+    } catch (error) {
+      console.error("Error completing resource:", error);
       toast({
         title: "Error",
         description:
-          "Unable to mark resource as complete. Missing resource data.",
+          error instanceof Error
+            ? error.message
+            : "Failed to mark resource as completed",
         variant: "destructive",
       });
-      return;
-    }
-
-    // Check if the resource is already completed
-    if (completedResources[resourceId]) {
-      toast({
-        title: "Already Completed",
-        description: "This resource has already been marked as complete.",
-      });
-      setShowTimeInput(false);
-      return;
-    }
-
-    // Get moduleId and lessonId if they exist
-    // For course-level resources, these might be undefined
-    const moduleId = currentResource.moduleId;
-    const lessonId = currentResource.lessonId;
-
-    try {
-      setCompletingResourceId(resourceId);
-      const token = getToken();
-      if (!token) {
-        console.error("No authentication token found");
-        toast({
-          title: "Authentication Error",
-          description: "Please log in again to continue.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Parse the time input as a number
-      const timeSpent = parseInt(resourceTimeInput) || 0;
-
-      if (timeSpent <= 0) {
-        toast({
-          title: "Invalid Time",
-          description: "Please enter a valid time (greater than 0 minutes).",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Prepare request data - only include moduleId and lessonId if they exist
-      const requestData: any = {
-        resourceId: resourceId,
-        timeSpent,
-      };
-
-      // Only add moduleId and lessonId if they exist
-      if (moduleId) requestData.moduleId = moduleId;
-      if (lessonId) requestData.lessonId = lessonId;
-
-      // Close the dialog immediately to improve UX
-      setShowTimeInput(false);
-
-      // Show immediate feedback
-      toast({
-        title: "Processing...",
-        description: `Marking resource as complete and adding ${timeSpent} minutes to your progress.`,
-      });
-
-      // Make the API call
-      const apiUrl = `http://localhost:5000/api/enrollments/${id}/resource-complete`;
-
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(requestData),
-      });
-
-      // Handle response
-      if (!response.ok) {
-        let errorMessage = `Server error (${response.status})`;
-
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          try {
-            const errorData = await response.json();
-            console.error("API error response:", errorData);
-            errorMessage = errorData.message || errorMessage;
-          } catch (e) {
-            console.error("Failed to parse error response as JSON:", e);
-          }
-        } else {
-          const errorText = await response.text();
-          console.error("API error response (text):", errorText);
-          errorMessage = errorText || errorMessage;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      // Process successful response
-      try {
-        const updatedEnrollment = await response.json();
-        console.log(
-          "Resource completion successful, updated enrollment:",
-          updatedEnrollment
-        );
-
-        // Update local state
-        setEnrollment(updatedEnrollment);
-
-        // Update completed resources immediately
-        setCompletedResources((prev) => ({
-          ...prev,
-          [resourceId]: true,
-        }));
-
-        // Show success message
-        toast({
-          title: "Resource Completed",
-          description: `Added ${timeSpent} minutes to your course time. Total: ${formatTime(
-            updatedEnrollment.totalTimeSpent
-          )}`,
-        });
-      } catch (e) {
-        console.error("Error parsing successful response:", e);
-        toast({
-          title: "Warning",
-          description:
-            "Resource marked as complete, but there was an issue updating the UI.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("Error in resource completion process:", error);
-
-      // Update UI to show completion locally even if server failed
-      if (enrollment && resourceId) {
-        // Add time locally
-        const updatedTotalTime =
-          (enrollment.totalTimeSpent || 0) + (parseInt(resourceTimeInput) || 0);
-
-        // Create temporary updated enrollment
-        const tempUpdatedEnrollment = {
-          ...enrollment,
-          totalTimeSpent: updatedTotalTime,
-          resourceTimeSpent:
-            (enrollment.resourceTimeSpent || 0) +
-            (parseInt(resourceTimeInput) || 0),
-          resourcesCompleted: (enrollment.resourcesCompleted || 0) + 1,
-        };
-
-        // Update local state
-        setEnrollment(tempUpdatedEnrollment);
-        setCompletedResources((prev) => ({
-          ...prev,
-          [resourceId]: true,
-        }));
-
-        toast({
-          title: "Local Update Only",
-          description:
-            error instanceof Error
-              ? `Server error: ${error.message}. Changes saved locally only.`
-              : "Your time was recorded locally but couldn't be saved to the server.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Operation Failed",
-          description:
-            error instanceof Error
-              ? error.message
-              : "Failed to mark resource as complete.",
-          variant: "destructive",
-        });
-      }
     } finally {
       setCompletingResourceId(null);
-      setResourceTimeInput("");
-      setCurrentResource(null);
     }
   };
 
@@ -1223,7 +1021,12 @@ export default function CourseView() {
                 Open in New Tab
               </Button>
             </div>
-            <div className="min-h-[400px] w-full bg-gray-100 rounded-lg overflow-hidden">
+            <div className="min-h-[400px] w-full bg-gray-100 rounded-lg overflow-hidden relative">
+              {pdfLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                  <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+                </div>
+              )}
               <iframe
                 src={
                   "https://docs.google.com/gview?embedded=true&url=" +
@@ -1232,6 +1035,7 @@ export default function CourseView() {
                 className="w-full h-full min-h-[400px] rounded-lg"
                 title={lesson.title}
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                onLoad={() => setPdfLoading(false)}
               />
             </div>
           </div>
@@ -1472,8 +1276,8 @@ export default function CourseView() {
                               <span className="text-sm font-medium">
                                 {Math.round(enrollment.progress)}%
                               </span>
-                              {!enrollment.completed &&
-                                null
+                              {
+                                !enrollment.completed && null
                                 // <Button
                                 //   variant="outline"
                                 //   onClick={handleCompleteEntireCourse}
@@ -1747,11 +1551,19 @@ export default function CourseView() {
                 </div>
                 <div className="flex-1 bg-gray-50 rounded-lg overflow-hidden">
                   {selectedResource.url.endsWith(".pdf") ? (
-                    <iframe
-                      src={`${selectedResource.url}#toolbar=0&navpanes=0`}
-                      className="w-full h-full border-0"
-                      title={selectedResource.title}
-                    />
+                    <div className="relative w-full h-full">
+                      {resourcePdfLoading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+                        </div>
+                      )}
+                      <iframe
+                        src={`${selectedResource.url}#toolbar=0&navpanes=0`}
+                        className="w-full h-full border-0"
+                        title={selectedResource.title}
+                        onLoad={() => setResourcePdfLoading(false)}
+                      />
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center p-4">
