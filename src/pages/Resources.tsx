@@ -274,7 +274,7 @@ const Resources: React.FC = () => {
                   <div className="space-y-1 text-sm text-muted-foreground">
                     <p className="flex items-center gap-1">
                       <span className="font-medium">Course:</span>
-                      {resource.course.title}
+                      {resource?.course?.title}
                     </p>
                     {resource.size && (
                       <p className="flex items-center gap-1">
