@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_URL = 'https://educube-navigator.onrender.com/api';
+// Use the environment variable or a fallback URL
+const API_URL = process.env.BACKEND_API_URL || 'https://educube-navigator.onrender.com/api';
+
 
 const api = axios.create({
   baseURL: API_URL,

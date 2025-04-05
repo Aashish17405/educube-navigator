@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Download, File, FileText, Link as LinkIcon, PlayCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/services/api";
-import { PDFViewer } from "./PDFViewer";
 
 interface Resource {
   title: string;
@@ -96,11 +95,6 @@ export default function ResourceItem({ resource }: { resource: Resource }) {
             )}
           </Button>
         </div>
-        <PDFViewer 
-          fileId={resource.fileId}
-          fileName={resource.fileName || resource.title}
-          mimeType={resource.mimeType}
-        />
       </div>
     );
   }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../../assets/OIP-removebg-preview.png";
+import instructorAvatar from "../../assets/instruct.png";
+import learnerAvatar from "../../assets/learner.png";
 import {
   Sidebar,
   SidebarContent,
@@ -111,7 +113,11 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 space-y-4">
         <div className="flex items-center gap-3 rounded-md p-2">
           <Avatar>
-            <AvatarImage src={`${user?.role === "instructor" ? "/src/assets/instruct.png" : "/src/assets/learner.png"}`} />
+            <AvatarImage
+              src={
+                user?.role === "instructor" ? instructorAvatar : learnerAvatar
+              }
+            />
             <AvatarFallback>
               {user?.username?.[0]?.toUpperCase() || "U"}
             </AvatarFallback>

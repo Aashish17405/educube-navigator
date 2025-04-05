@@ -197,7 +197,7 @@ export default function CourseView() {
     try {
       setLoading(true);
       const token = await getToken();
-      const response = await fetch(`http://localhost:5000/api/courses/${id}`, {
+      const response = await fetch(`${process.env.BACKEND_API_URL}/courses/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -213,7 +213,7 @@ export default function CourseView() {
       // If user is logged in, fetch enrollment status
       if (user) {
         const enrollmentResponse = await fetch(
-          `http://localhost:5000/api/enrollments/status/${id}`,
+          `${process.env.BACKEND_API_URL}/enrollments/status/${id}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -278,7 +278,7 @@ export default function CourseView() {
   // Helper function to debug API connectivity
   const debugApiConnection = async () => {
     try {
-      const testResponse = await fetch("http://localhost:5000/api/courses", {
+      const testResponse = await fetch(`${process.env.BACKEND_API_URL}/courses`, {
         method: "GET",
       });
 
@@ -302,7 +302,7 @@ export default function CourseView() {
             );
             setApiState("error");
             setApiErrorDetails(
-              "The API is returning HTML instead of JSON. Check if your API server is running."
+              "The API is returning HTML instead of JSON."
             );
             toast({
               title: "API Configuration Error",
@@ -334,7 +334,6 @@ export default function CourseView() {
       console.error("Debug API connection error:", error);
       setApiState("error");
 
-      // Network errors usually mean the server is completely unreachable
       if (
         error instanceof TypeError &&
         error.message.includes("Failed to fetch")
@@ -346,7 +345,7 @@ export default function CourseView() {
         toast({
           title: "Server Unreachable",
           description:
-            "Cannot connect to the API server. Please check if the server is running and your network connection is stable.",
+            "Cannot connect to the API server.",
           variant: "destructive",
         });
         setLoading(false);
@@ -378,7 +377,7 @@ export default function CourseView() {
         // Try to fetch the course data
         try {
           const courseRes = await fetch(
-            `http://localhost:5000/api/courses/${id}`,
+            `${process.env.BACKEND_API_URL}/courses/${id}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -427,7 +426,7 @@ export default function CourseView() {
 
           // Now fetch enrollment data
           const enrollmentRes = await fetch(
-            `http://localhost:5000/api/enrollments/status/${id}`,
+            `${process.env.BACKEND_API_URL}/enrollments/status/${id}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -661,10 +660,8 @@ export default function CourseView() {
         updatedEnrollment
       );
 
-      // Update local state
       setEnrollment(updatedEnrollment);
 
-      // Show success message
       toast({
         title: "Lesson Completed",
         description: "You have successfully completed this lesson.",
@@ -732,28 +729,23 @@ export default function CourseView() {
     );
   };
 
-  // Check if all course content is completed
   const isAllContentCompleted = () => {
     if (!enrollment || !course) return false;
 
-    // Check if all modules are completed
     const allModulesCompleted = enrollment.modules.every(
       (module) => module.completed
     );
 
-    // Check if all lessons in all modules are completed
     const allLessonsCompleted = enrollment.modules.every((module) =>
       module.lessons.every((lesson) => lesson.completed)
     );
 
-    // Check if all resources in all lessons are completed
     const allLessonResourcesCompleted = enrollment.modules.every((module) =>
       module.lessons.every((lesson) =>
         lesson.resources.every((resource) => resource.completed)
       )
     );
 
-    // Check if all course-level resources are completed
     const totalCourseResources = course.resources ? course.resources.length : 0;
     const completedCourseResources = enrollment.completedResources
       ? enrollment.completedResources.length
@@ -937,7 +929,6 @@ export default function CourseView() {
         }
       }
 
-      // Check if any content property contains a URL string
       if (
         obj.content &&
         typeof obj.content === "string" &&
@@ -947,7 +938,6 @@ export default function CourseView() {
         return obj.content;
       }
 
-      // Check if there's a resources array with URLs
       if (
         obj.resources &&
         Array.isArray(obj.resources) &&
@@ -960,7 +950,6 @@ export default function CourseView() {
       return null;
     };
 
-    // Get the URL from the lesson object
     const lessonUrl = findUrl(lesson);
     console.log("Found lesson URL:", lessonUrl);
 
@@ -1153,15 +1142,10 @@ export default function CourseView() {
               <div className="p-4 border rounded-md">
                 <p className="font-medium">Troubleshooting steps:</p>
                 <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
-                  <li>Check if your backend server is running</li>
                   <li>
                     Verify the API base URL in your environment configuration
                   </li>
                   <li>Look for CORS issues in the browser console</li>
-                  <li>
-                    Check if the server is returning HTML instead of JSON (often
-                    means you're hitting a different server)
-                  </li>
                 </ul>
               </div>
 
