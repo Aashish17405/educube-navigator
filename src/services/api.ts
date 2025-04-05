@@ -81,6 +81,12 @@ export const courseService = {
     return response.data;
   },
 
+  // Get user's enrolled courses
+  getEnrolledCourses: async () => {
+    const response = await api.get('/enrollments/dashboard');
+    return response.data;
+  },
+
   // Get course details with student progress (instructors only)
   getCourseProgress: async (courseId: string) => {
     const response = await api.get(`/courses/${courseId}/progress`);

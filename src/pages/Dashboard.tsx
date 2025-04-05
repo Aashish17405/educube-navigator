@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Clock, BookOpen, Trophy, Timer, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 interface Course {
   _id: string;
@@ -77,7 +78,16 @@ export default function Dashboard() {
     },
   });
   const [loading, setLoading] = useState(true);
-  const { getToken } = useAuth();
+  const { getToken, user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      navigate("/signin");
+    } else if (user.role === "instructor") {
+      navigate("/instructor/dashboard");
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -87,18 +97,24 @@ export default function Dashboard() {
         if (!token) throw new Error("No authentication token found");
 
         // Fetch enrollments
-        const enrollmentsResponse = await fetch("http://localhost:5000/api/enrollments/dashboard", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const enrollmentsResponse = await fetch(
+          "http://localhost:5000/api/enrollments/dashboard",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         // Fetch available courses
-        const coursesResponse = await fetch("http://localhost:5000/api/courses", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const coursesResponse = await fetch(
+          "http://localhost:5000/api/courses",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         if (!enrollmentsResponse.ok || !coursesResponse.ok) {
           throw new Error("Failed to fetch dashboard data");
@@ -287,7 +303,10 @@ export default function Dashboard() {
                     </div>
                     <Button asChild size="sm">
                       <Link to={`/courses/${enrollment.course._id}`}>
-                        {enrollment.completed ? "Review Course" : "Continue Learning"} <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                        {enrollment.completed
+                          ? "Review Course"
+                          : "Continue Learning"}{" "}
+                        <ArrowRight className="ml-1 h-3.5 w-3.5" />
                       </Link>
                     </Button>
                   </div>

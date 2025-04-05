@@ -27,6 +27,12 @@ router.post("/:courseId/enroll", verifyToken, async (req, res) => {
       })),
     });
 
+    // Also add the user to the course's enrolledStudents array if not already there
+    if (!course.enrolledStudents.includes(req.user._id)) {
+      course.enrolledStudents.push(req.user._id);
+      await course.save();
+    }
+
     await enrollment.save();
     res.status(201).json(enrollment);
   } catch (error) {
@@ -45,7 +51,7 @@ router.get("/status/:courseId", verifyToken, async (req, res) => {
   try {
     const enrollment = await Enrollment.findOne({
       user: req.user._id,
-      course: req.params.courseId
+      course: req.params.courseId,
     });
 
     if (!enrollment) {
@@ -240,7 +246,7 @@ router.post("/:courseId/complete", verifyToken, async (req, res) => {
 router.post("/:courseId/resource-complete", verifyToken, async (req, res) => {
   try {
     const { moduleId, lessonId, resourceId, timeSpent } = req.body;
-    
+
     if (!resourceId) {
       return res.status(400).json({ message: "Resource ID is required" });
     }
@@ -255,14 +261,14 @@ router.post("/:courseId/resource-complete", verifyToken, async (req, res) => {
     }
 
     let resourceTracked = false;
-    
+
     // If moduleId and lessonId are provided, track the resource in that specific module/lesson
     if (moduleId && lessonId) {
       // Find the module and lesson
       const moduleIndex = enrollment.modules.findIndex(
         (m) => m.moduleId.toString() === moduleId
       );
-      
+
       if (moduleIndex === -1) {
         return res.status(404).json({ message: "Module not found" });
       }
@@ -270,7 +276,7 @@ router.post("/:courseId/resource-complete", verifyToken, async (req, res) => {
       const lessonIndex = enrollment.modules[moduleIndex].lessons.findIndex(
         (l) => l.lessonId.toString() === lessonId
       );
-      
+
       if (lessonIndex === -1) {
         return res.status(404).json({ message: "Lesson not found" });
       }
@@ -281,9 +287,9 @@ router.post("/:courseId/resource-complete", verifyToken, async (req, res) => {
       }
 
       // Check if resource is already tracked
-      const resourceIndex = enrollment.modules[moduleIndex].lessons[lessonIndex].resources.findIndex(
-        (r) => r.resourceId.toString() === resourceId
-      );
+      const resourceIndex = enrollment.modules[moduleIndex].lessons[
+        lessonIndex
+      ].resources.findIndex((r) => r.resourceId.toString() === resourceId);
 
       if (resourceIndex === -1) {
         // Add new resource progress
@@ -291,19 +297,22 @@ router.post("/:courseId/resource-complete", verifyToken, async (req, res) => {
           resourceId,
           timeSpent: timeSpent || 0,
           completed: true,
-          completedAt: Date.now()
+          completedAt: Date.now(),
         });
       } else {
         // Update existing resource progress
-        const resource = enrollment.modules[moduleIndex].lessons[lessonIndex].resources[resourceIndex];
+        const resource =
+          enrollment.modules[moduleIndex].lessons[lessonIndex].resources[
+            resourceIndex
+          ];
         resource.timeSpent = (resource.timeSpent || 0) + (timeSpent || 0);
         resource.completed = true;
         resource.completedAt = Date.now();
       }
-      
+
       resourceTracked = true;
-    } 
-    
+    }
+
     // If the resource wasn't tracked in a specific module/lesson (or module/lesson weren't provided),
     // we'll just track it at the enrollment level
     if (!resourceTracked) {
@@ -311,27 +320,29 @@ router.post("/:courseId/resource-complete", verifyToken, async (req, res) => {
       if (!enrollment.completedResources) {
         enrollment.completedResources = [];
       }
-      
+
       // Check if this resource is already in the completed resources
       const existingResourceIndex = enrollment.completedResources.findIndex(
-        r => r.resourceId.toString() === resourceId
+        (r) => r.resourceId.toString() === resourceId
       );
-      
+
       if (existingResourceIndex === -1) {
         // Add new completed resource
         enrollment.completedResources.push({
           resourceId,
-          completedAt: Date.now()
+          completedAt: Date.now(),
         });
       }
     }
 
     // Update resource completion stats
     enrollment.resourcesCompleted = enrollment.resourcesCompleted + 1 || 1;
-    enrollment.resourceTimeSpent = (enrollment.resourceTimeSpent || 0) + (timeSpent || 0);
-    
+    enrollment.resourceTimeSpent =
+      (enrollment.resourceTimeSpent || 0) + (timeSpent || 0);
+
     // Update total time spent
-    enrollment.totalTimeSpent = (enrollment.totalTimeSpent || 0) + (timeSpent || 0);
+    enrollment.totalTimeSpent =
+      (enrollment.totalTimeSpent || 0) + (timeSpent || 0);
 
     await enrollment.save();
     res.json(enrollment);

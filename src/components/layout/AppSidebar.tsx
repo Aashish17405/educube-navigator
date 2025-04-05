@@ -111,16 +111,16 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 space-y-4">
         <div className="flex items-center gap-3 rounded-md p-2">
           <Avatar>
-            <AvatarImage src="/placeholder.svg" />
+            <AvatarImage src={`${user?.role === "instructor" ? "/src/assets/instruct.png" : "/src/assets/learner.png"}`} />
             <AvatarFallback>
               {user?.username?.[0]?.toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <span className="text-sm font-medium">
+            <span className="text-lg font-medium">
               {user?.username || "User"}
             </span>
-            <span className="text-xs text-muted-foreground capitalize">
+            <span className="text-sm text-muted-foreground capitalize">
               {user?.role || "Guest"}
             </span>
           </div>

@@ -55,14 +55,19 @@ interface Course {
   progress?: number;
   score?: number;
   isEnrolled?: boolean;
+  actualEnrollmentCount?: number;
 }
 
 export default function Courses() {
   const [courses, setCourses] = useState<Course[]>([]);
+  const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const { user } = useAuth();
+  const [enrollingCourseId, setEnrollingCourseId] = useState<string | null>(
+    null
+  );
+  const { user, getToken } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -71,9 +76,33 @@ export default function Courses() {
 
   const loadCourses = async () => {
     try {
-      const data = await courseService.getCourses();
-      setCourses(data);
-      console.log(data);
+      setLoading(true);
+      // First fetch all courses
+      const allCourses = await courseService.getCourses();
+      console.log("Courses data with API enrollment status:", allCourses);
+
+      // For learners, also fetch their enrolled courses from the dedicated endpoint
+      if (user?.role === "learner") {
+        const enrolledCoursesData = await courseService.getEnrolledCourses();
+        console.log("Directly fetched enrolled courses:", enrolledCoursesData);
+
+        // Create a set of enrolled course IDs for faster lookups
+        const enrolledCourseIds = new Set(
+          enrolledCoursesData.map((enrollment: any) => enrollment.course._id)
+        );
+        setEnrolledCourses(enrolledCoursesData);
+
+        // Mark courses as enrolled using both the isEnrolled flag and our enrolledCourseIds
+        const coursesWithUpdatedStatus = allCourses.map((course: Course) => ({
+          ...course,
+          isEnrolled: course.isEnrolled || enrolledCourseIds.has(course._id),
+        }));
+
+        setCourses(coursesWithUpdatedStatus);
+      } else {
+        // For instructors, just use the original courses
+        setCourses(allCourses);
+      }
     } catch (error: any) {
       toast({
         title: "Error",
@@ -85,20 +114,97 @@ export default function Courses() {
     }
   };
 
+  // Improved helper function to check enrollment status
+  const isUserEnrolledInCourse = (course: Course) => {
+    // First check the isEnrolled flag from the API response
+    if (course.isEnrolled === true) {
+      return true;
+    }
+
+    // Then check our separately fetched enrollments
+    if (enrolledCourses.length > 0) {
+      const isEnrolled = enrolledCourses.some(
+        (enrollment) => enrollment.course._id === course._id
+      );
+      if (isEnrolled) return true;
+    }
+
+    // As a fallback, check if the user's ID is in the enrolledStudents array
+    if (user && course.enrolledStudents && course.enrolledStudents.length > 0) {
+      // Check if user._id exists in enrolledStudents array (MongoDB IDs are stored as strings)
+      return course.enrolledStudents.some(
+        (studentId) => studentId.toString() === user.id.toString()
+      );
+    }
+
+    return false;
+  };
+
   const handleEnroll = async (courseId: string) => {
     try {
-      await courseService.enrollInCourse(courseId);
+      // Find the course in our local state
+      const courseToEnroll = courses.find((course) => course._id === courseId);
+
+      // Check if already enrolled before making API call
+      if (courseToEnroll && isUserEnrolledInCourse(courseToEnroll)) {
+        toast({
+          title: "Already Enrolled",
+          description: "You are already enrolled in this course.",
+          variant: "default",
+        });
+        return;
+      }
+
+      setEnrollingCourseId(courseId);
+      const token = getToken();
+
+      // Use the same API endpoint pattern as CourseView.tsx
+      const response = await fetch(
+        `http://localhost:5000/api/enrollments/${courseId}/enroll`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to enroll in course");
+      }
+
+      const enrollmentData = await response.json();
+
+      // Update the course in the local state to reflect enrollment
+      setCourses((prevCourses) =>
+        prevCourses.map((course) => {
+          if (course._id === courseId) {
+            return {
+              ...course,
+              isEnrolled: true,
+              enrolledStudents: [...(course.enrolledStudents || []), user?.id], // Add current user ID to enrolled students
+            };
+          }
+          return course;
+        })
+      );
+
       toast({
-        title: "Success",
-        description: "Successfully enrolled in course",
+        title: "Enrolled Successfully",
+        description: "You are now enrolled in this course",
       });
-      loadCourses(); // Reload courses to update enrollment status
     } catch (error: any) {
+      console.error("Enrollment error:", error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to enroll in course",
+        title: "Enrollment Failed",
+        description:
+          error instanceof Error ? error.message : "Failed to enroll in course",
         variant: "destructive",
       });
+    } finally {
+      setEnrollingCourseId(null);
     }
   };
 
@@ -206,11 +312,23 @@ export default function Courses() {
                 </Link>
                 <CardContent className="flex-grow">
                   <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      <span className="text-sm text-muted-foreground">
-                        {course.enrolledStudents?.length || 0} students enrolled
-                      </span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        <span className="text-sm text-muted-foreground">
+                          <span className="font-medium">
+                            {course.actualEnrollmentCount !== undefined
+                              ? course.actualEnrollmentCount
+                              : course.enrolledStudents?.length || 0}
+                          </span>{" "}
+                          learners enrolled
+                        </span>
+                      </div>
+                      {isUserEnrolledInCourse(course) && (
+                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+                          Enrolled
+                        </Badge>
+                      )}
                     </div>
                     {course.progress !== undefined && (
                       <div className="space-y-2">
@@ -224,35 +342,56 @@ export default function Courses() {
                   </div>
                 </CardContent>
                 <CardFooter className="flex flex-col space-y-2">
-                  {user?.role === "learner" && !course.isEnrolled && (
-                    <Button
-                      className="w-full"
-                      onClick={() => handleEnroll(course._id)}
-                    >
-                      Enroll Now
-                    </Button>
+                  {user?.role === "learner" && (
+                    <>
+                      {isUserEnrolledInCourse(course) ? (
+                        // Show the "Continue Learning" button for enrolled courses
+                        <Button variant="outline" className="w-full" asChild>
+                          <Link to={`/courses/${course._id}`}>
+                            Continue Learning
+                          </Link>
+                        </Button>
+                      ) : (
+                        // Show "Enroll Now" button only if not enrolled
+                        <Button
+                          className="w-full"
+                          onClick={() => handleEnroll(course._id)}
+                          disabled={
+                            enrollingCourseId === course._id ||
+                            isUserEnrolledInCourse(course)
+                          }
+                        >
+                          {enrollingCourseId === course._id ? (
+                            <div className="flex items-center justify-center">
+                              <span className="mr-2 animate-spin">↻</span>
+                              Enrolling...
+                            </div>
+                          ) : isUserEnrolledInCourse(course) ? (
+                            "Already Enrolled"
+                          ) : (
+                            "Enroll Now"
+                          )}
+                        </Button>
+                      )}
+                    </>
                   )}
-                  {(user?.role === "instructor" || course.isEnrolled) && (
+
+                  {user?.role === "instructor" && (
                     <div className="w-full flex flex-col gap-2">
                       <Button variant="outline" className="w-full" asChild>
-                        <Link to={`/courses/${course._id}`}>
-                          {user?.role === "instructor"
-                            ? "Manage Course"
-                            : "Continue Learning"}
-                        </Link>
+                        <Link to={`/courses/${course._id}`}>Manage Course</Link>
                       </Button>
 
-                      {user?.role === "instructor" &&
-                        user?.id === course.instructor._id && (
-                          <Button
-                            variant="destructive"
-                            className="w-full"
-                            onClick={() => handleDeleteCourse(course._id)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Course
-                          </Button>
-                        )}
+                      {user.id === course.instructor._id && (
+                        <Button
+                          variant="destructive"
+                          className="w-full"
+                          onClick={() => handleDeleteCourse(course._id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Course
+                        </Button>
+                      )}
                     </div>
                   )}
                 </CardFooter>

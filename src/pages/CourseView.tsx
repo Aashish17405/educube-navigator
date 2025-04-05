@@ -1225,7 +1225,10 @@ export default function CourseView() {
             </div>
             <div className="min-h-[400px] w-full bg-gray-100 rounded-lg overflow-hidden">
               <iframe
-                src={lessonUrl}
+                src={
+                  "https://docs.google.com/gview?embedded=true&url=" +
+                  encodeURIComponent(lessonUrl)
+                }
                 className="w-full h-full min-h-[400px] rounded-lg"
                 title={lesson.title}
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
@@ -1390,9 +1393,44 @@ export default function CourseView() {
         </div>
       ) : course ? (
         <div className="container mx-auto py-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Course Content */}
             <div className="md:col-span-2 space-y-2">
+              {/* Course Progress */}
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Your Progress</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span>Overall Progress</span>
+                          <span>{enrollment?.progress.toFixed(2) || 0}%</span>
+                        </div>
+                        <Progress value={enrollment?.progress || 0} />
+                      </div>
+                      {enrollment?.completed ? (
+                        <div className="flex items-center gap-2 text-green-500">
+                          <Trophy className="h-5 w-5" />
+                          <span>Course Completed!</span>
+                        </div>
+                      ) : (
+                        <Button
+                          className="w-full"
+                          disabled={!isAllContentCompleted()}
+                          onClick={handleCompleteEntireCourse}
+                        >
+                          {isAllContentCompleted()
+                            ? "Mark Course as Completed"
+                            : "Complete all content to finish course"}
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
               <Card>
                 <CardHeader>
                   <CardTitle>Course Content</CardTitle>
@@ -1434,35 +1472,35 @@ export default function CourseView() {
                               <span className="text-sm font-medium">
                                 {Math.round(enrollment.progress)}%
                               </span>
-                              {!enrollment.completed && (
-                                <Button
-                                  variant="outline"
-                                  onClick={handleCompleteEntireCourse}
-                                  disabled={
-                                    isCompletingCourse ||
-                                    !isAllContentCompleted()
-                                  }
-                                  title={
-                                    !isAllContentCompleted()
-                                      ? "Complete all lessons and resources first"
-                                      : ""
-                                  }
-                                >
-                                  {isCompletingCourse
-                                    ? "Completing..."
-                                    : "Mark Course as Completed"}
-                                </Button>
-                              )}
+                              {!enrollment.completed &&
+                                null
+                                // <Button
+                                //   variant="outline"
+                                //   onClick={handleCompleteEntireCourse}
+                                //   disabled={
+                                //     isCompletingCourse ||
+                                //     !isAllContentCompleted()
+                                //   }
+                                //   title={
+                                //     !isAllContentCompleted()
+                                //       ? "Complete all lessons and resources first"
+                                //       : ""
+                                //   }
+                                // >
+                                //   {isCompletingCourse
+                                //     ? "Completing..."
+                                //     : "Mark Course as Completed"}
+                                // </Button>
+                              }
                             </div>
-                          ) : (
-                            user && user.role === "learner" ? (
-                              <Button
+                          ) : user && user.role === "learner" ? (
+                            <Button
                               onClick={handleEnroll}
                               disabled={isEnrolling}
                             >
                               {isEnrolling ? "Enrolling..." : "Enroll Now"}
-                            </Button>) : null
-                          )}
+                            </Button>
+                          ) : null}
                         </div>
                       </CardContent>
                     </Card>
@@ -1584,42 +1622,6 @@ export default function CourseView() {
                 </CardContent>
               </Card>
             </div>
-
-            {/* Course Progress */}
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Your Progress</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span>Overall Progress</span>
-                        <span>{enrollment?.progress.toFixed(2) || 0}%</span>
-                      </div>
-                      <Progress value={enrollment?.progress || 0} />
-                    </div>
-                    {enrollment?.completed ? (
-                      <div className="flex items-center gap-2 text-green-500">
-                        <Trophy className="h-5 w-5" />
-                        <span>Course Completed!</span>
-                      </div>
-                    ) : (
-                      <Button
-                        className="w-full"
-                        disabled={!isAllContentCompleted()}
-                        onClick={handleCompleteEntireCourse}
-                      >
-                        {isAllContentCompleted()
-                          ? "Mark Course as Completed"
-                          : "Complete all content to finish course"}
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </div>
       ) : (
@@ -1633,7 +1635,7 @@ export default function CourseView() {
       )}
       <div className="container mx-auto ">
         <div className="grid grid-cols-12 gap-2">
-          <div className="col-span-12 lg:col-span-8">
+          <div className="col-span-12">
             <Card className="h-full">
               <CardHeader>
                 <CardTitle>Course Resources</CardTitle>

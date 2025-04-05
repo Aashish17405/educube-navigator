@@ -75,11 +75,31 @@ router.get("/", verifyToken, async (req, res) => {
         "title description thumbnail category difficulty estimatedTotalTime enrolledStudents"
       );
 
-    // Check if the current user is enrolled in each course
-    const coursesWithEnrollmentStatus = await Promise.all(
+    // Get enrollment counts from Enrollment collection
+    const courseEnrollmentCounts = await Promise.all(
+      courses.map(async (course) => {
+        const enrollmentCount = await Enrollment.countDocuments({
+          course: course._id,
+        });
+        return { courseId: course._id.toString(), count: enrollmentCount };
+      })
+    );
+
+    // Create a map for quick lookup
+    const enrollmentCountMap = new Map();
+    courseEnrollmentCounts.forEach((item) => {
+      enrollmentCountMap.set(item.courseId, item.count);
+    });
+
+    // Check if the current user is enrolled in each course and add enrollment count
+    const coursesWithEnrollmentData = await Promise.all(
       courses.map(async (course) => {
         // Convert to a plain object so we can add properties
         const courseObj = course.toObject();
+
+        // Add the actual enrollment count from Enrollment collection
+        courseObj.actualEnrollmentCount =
+          enrollmentCountMap.get(course._id.toString()) || 0;
 
         // Check if user is enrolled (either through the course object or by checking enrollments)
         courseObj.isEnrolled = course.enrolledStudents.some(
@@ -90,7 +110,7 @@ router.get("/", verifyToken, async (req, res) => {
       })
     );
 
-    res.json(coursesWithEnrollmentStatus);
+    res.json(coursesWithEnrollmentData);
   } catch (error) {
     console.error("Error fetching courses:", error);
     res.status(500).json({ message: error.message });

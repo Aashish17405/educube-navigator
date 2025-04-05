@@ -1,22 +1,22 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
   SelectValue,
 } from "@/components/ui/select";
 import {
@@ -25,11 +25,11 @@ import {
   Draggable,
   DropResult,
 } from "react-beautiful-dnd";
-import {
-  Grip,
-  Plus,
-  Trash2,
-  ChevronUp,
+import { 
+  Grip, 
+  Plus, 
+  Trash2, 
+  ChevronUp, 
   ChevronDown,
   FileUp,
   PlayCircle,
@@ -41,7 +41,7 @@ import {
   File,
   Loader2,
 } from "lucide-react";
-import {
+import { 
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -109,7 +109,7 @@ const CreateCourse = () => {
     { moduleId: string; requiredModules: string[] }[]
   >([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  
   const { toast } = useToast();
   const navigate = useNavigate();
   const { getToken } = useAuth();
@@ -192,7 +192,7 @@ const CreateCourse = () => {
 
         setThumbnailPreview(response.data.url);
         setThumbnailPublicId(response.data.publicId);
-
+        
         toast({
           title: "Success",
           description: "Thumbnail uploaded successfully",
@@ -227,12 +227,12 @@ const CreateCourse = () => {
         setResources((prev) => [
           ...prev,
           {
-            title: resourceData.title,
-            type: resourceData.type,
-            url,
-            publicId,
-            fileName,
-            mimeType,
+          title: resourceData.title,
+          type: resourceData.type,
+          url,
+          publicId,
+          fileName,
+          mimeType,
             estimatedTime: resourceData.estimatedTime,
           },
         ]);
@@ -244,10 +244,10 @@ const CreateCourse = () => {
         setResources((prev) => [
           ...prev,
           {
-            title: resourceData.title,
-            type: resourceData.type,
-            url: resourceData.url,
-            publicId: uniqueId,
+          title: resourceData.title,
+          type: resourceData.type,
+          url: resourceData.url,
+          publicId: uniqueId,
             estimatedTime: resourceData.estimatedTime,
           },
         ]);
@@ -337,7 +337,7 @@ const CreateCourse = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     // Validate required fields
     if (!courseTitle.trim()) {
       toast({
@@ -410,7 +410,7 @@ const CreateCourse = () => {
         difficulty,
         thumbnail: thumbnailPreview
           ? {
-              url: thumbnailPreview,
+          url: thumbnailPreview,
               publicId: thumbnailPublicId,
             }
           : undefined,
@@ -434,14 +434,14 @@ const CreateCourse = () => {
             estimatedTime: lesson.estimatedTime || 0,
             resources:
               lesson.resources?.map((resource) => ({
-                title: resource.title,
-                type: resource.type,
-                url: resource.url,
-                publicId: resource.publicId,
-                fileName: resource.fileName,
-                mimeType: resource.mimeType,
+              title: resource.title,
+              type: resource.type,
+              url: resource.url,
+              publicId: resource.publicId,
+              fileName: resource.fileName,
+              mimeType: resource.mimeType,
                 estimatedTime: resource.estimatedTime || 0,
-              })) || [],
+            })) || [],
             completionCriteria: lesson.completionCriteria || "view",
             requiredScore: lesson.requiredScore,
             requiredTime: lesson.requiredTime,
@@ -503,19 +503,19 @@ const CreateCourse = () => {
               {/* Basic fields (title, description, etc.) */}
               <div>
                 <Label htmlFor="course-title">Course Title</Label>
-                <Input
-                  id="course-title"
-                  placeholder="Enter course title"
-                  className="mt-1"
+                <Input 
+                  id="course-title" 
+                  placeholder="Enter course title" 
+                  className="mt-1" 
                   value={courseTitle}
                   onChange={(e) => setCourseTitle(e.target.value)}
                 />
               </div>
               <div>
                 <Label htmlFor="description">Course Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Enter course description"
+                <Textarea 
+                  id="description" 
+                  placeholder="Enter course description" 
                   className="mt-1"
                   rows={4}
                   value={description}
@@ -558,10 +558,10 @@ const CreateCourse = () => {
                 <div className="mt-1 border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
                   {thumbnailPreview ? (
                     <div className="mb-4">
-                      <img
-                        src={thumbnailPreview}
-                        alt="Course thumbnail preview"
-                        className="max-h-40 mx-auto rounded-md"
+                      <img 
+                        src={thumbnailPreview} 
+                        alt="Course thumbnail preview" 
+                        className="max-h-40 mx-auto rounded-md" 
                       />
                     </div>
                   ) : (
@@ -579,9 +579,9 @@ const CreateCourse = () => {
                     id="thumbnail-upload"
                     onChange={handleThumbnailChange}
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
+                  <Button 
+                    type="button" 
+                    variant="outline" 
                     onClick={(e) => {
                       e.preventDefault();
                       document.getElementById("thumbnail-upload")?.click();
@@ -676,7 +676,7 @@ const CreateCourse = () => {
                           const time = parseInt(e.target.value);
                           setResources((prev) =>
                             prev.map((r, i) =>
-                              i === index ? { ...r, estimatedTime: time } : r
+                            i === index ? { ...r, estimatedTime: time } : r
                             )
                           );
                         }}
@@ -765,7 +765,7 @@ const CreateCourse = () => {
                                   </Button>
                                 </div>
                               </div>
-
+                              
                               <div className="p-4">
                                 <Textarea
                                   value={module.description}
@@ -785,7 +785,7 @@ const CreateCourse = () => {
                                   className="mb-4 resize-none"
                                   rows={2}
                                 />
-
+                                
                                 <Accordion type="multiple" className="w-full">
                                   <AccordionItem
                                     value="lessons"
@@ -809,28 +809,28 @@ const CreateCourse = () => {
                                           >
                                             {module.lessons.map(
                                               (lesson, lessonIndex) => (
-                                                <Draggable
-                                                  key={lesson.title}
-                                                  draggableId={lesson.title}
-                                                  index={lessonIndex}
-                                                >
-                                                  {(provided) => (
-                                                    <div
-                                                      ref={provided.innerRef}
-                                                      {...provided.draggableProps}
-                                                      className="border rounded-md p-3"
-                                                    >
-                                                      <div className="flex items-center justify-between mb-2">
-                                                        <div className="flex items-center gap-2">
+                                              <Draggable
+                                                key={lesson.title}
+                                                draggableId={lesson.title}
+                                                index={lessonIndex}
+                                              >
+                                                {(provided) => (
+                                                  <div
+                                                    ref={provided.innerRef}
+                                                    {...provided.draggableProps}
+                                                    className="border rounded-md p-3"
+                                                  >
+                                                    <div className="flex items-center justify-between mb-2">
+                                                      <div className="flex items-center gap-2">
                                                           <div
                                                             {...provided.dragHandleProps}
                                                           >
-                                                            <Grip className="h-4 w-4 text-gray-400" />
-                                                          </div>
-                                                          <PlayCircle className="h-4 w-4 text-blue-500" />
-                                                          <Input
-                                                            value={lesson.title}
-                                                            onChange={(e) => {
+                                                          <Grip className="h-4 w-4 text-gray-400" />
+                                                        </div>
+                                                        <PlayCircle className="h-4 w-4 text-blue-500" />
+                                                        <Input
+                                                          value={lesson.title}
+                                                          onChange={(e) => {
                                                               setModules(
                                                                 (prev) =>
                                                                   prev.map(
@@ -838,7 +838,7 @@ const CreateCourse = () => {
                                                                       i ===
                                                                       moduleIndex
                                                                         ? {
-                                                                            ...m,
+                                                                ...m, 
                                                                             lessons:
                                                                               m.lessons.map(
                                                                                 (
@@ -860,21 +860,21 @@ const CreateCourse = () => {
                                                                         : m
                                                                   )
                                                               );
-                                                            }}
-                                                            className="font-medium border-0 bg-transparent p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0"
-                                                            placeholder="Lesson Title"
-                                                          />
-                                                        </div>
-                                                        <Button
-                                                          variant="ghost"
-                                                          size="sm"
-                                                          onClick={() => {
+                                                          }}
+                                                          className="font-medium border-0 bg-transparent p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0"
+                                                          placeholder="Lesson Title"
+                                                        />
+                                                      </div>
+                                                      <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
                                                             setModules((prev) =>
                                                               prev.map((m, i) =>
                                                                 i ===
                                                                 moduleIndex
                                                                   ? {
-                                                                      ...m,
+                                                              ...m, 
                                                                       lessons:
                                                                         m.lessons.filter(
                                                                           (
@@ -888,16 +888,16 @@ const CreateCourse = () => {
                                                                   : m
                                                               )
                                                             );
-                                                          }}
-                                                          className="h-6 w-6 p-0"
-                                                        >
-                                                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                                                        </Button>
-                                                      </div>
-
-                                                      <div className="grid grid-cols-2 gap-2">
-                                                        <Select
-                                                          value={lesson.type}
+                                                        }}
+                                                        className="h-6 w-6 p-0"
+                                                      >
+                                                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                                                      </Button>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                      <Select
+                                                        value={lesson.type}
                                                           onValueChange={(
                                                             value: any
                                                           ) => {
@@ -906,7 +906,7 @@ const CreateCourse = () => {
                                                                 i ===
                                                                 moduleIndex
                                                                   ? {
-                                                                      ...m,
+                                                              ...m, 
                                                                       lessons:
                                                                         m.lessons.map(
                                                                           (
@@ -916,11 +916,11 @@ const CreateCourse = () => {
                                                                             j ===
                                                                             lessonIndex
                                                                               ? {
-                                                                                  ...l,
-                                                                                  type: value,
+                                                                  ...l, 
+                                                                  type: value,
                                                                                   content:
                                                                                     "", // Reset content when type changes
-                                                                                  url: "",
+                                                                  url: "",
                                                                                   publicId:
                                                                                     "",
                                                                                 }
@@ -930,12 +930,12 @@ const CreateCourse = () => {
                                                                   : m
                                                               )
                                                             );
-                                                          }}
-                                                        >
-                                                          <SelectTrigger className="h-8 text-xs">
-                                                            <SelectValue placeholder="Type" />
-                                                          </SelectTrigger>
-                                                          <SelectContent>
+                                                        }}
+                                                      >
+                                                        <SelectTrigger className="h-8 text-xs">
+                                                          <SelectValue placeholder="Type" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
                                                             <SelectItem value="video">
                                                               Video
                                                             </SelectItem>
@@ -945,19 +945,19 @@ const CreateCourse = () => {
                                                             <SelectItem value="assignment">
                                                               Assignment
                                                             </SelectItem>
-                                                          </SelectContent>
-                                                        </Select>
-
+                                                        </SelectContent>
+                                                      </Select>
+                                                      
                                                         {lesson.type ===
                                                         "assignment" ? (
-                                                          <div className="mt-2">
-                                                            <Textarea
-                                                              placeholder="Enter assignment details and instructions..."
-                                                              className="min-h-[100px] text-sm"
+                                                        <div className="mt-2">
+                                                          <Textarea
+                                                            placeholder="Enter assignment details and instructions..."
+                                                            className="min-h-[100px] text-sm"
                                                               value={
                                                                 lesson.content
                                                               }
-                                                              onChange={(e) => {
+                                                            onChange={(e) => {
                                                                 setModules(
                                                                   (prev) =>
                                                                     prev.map(
@@ -965,7 +965,7 @@ const CreateCourse = () => {
                                                                         i ===
                                                                         moduleIndex
                                                                           ? {
-                                                                              ...m,
+                                                                  ...m, 
                                                                               lessons:
                                                                                 m.lessons.map(
                                                                                   (
@@ -975,7 +975,7 @@ const CreateCourse = () => {
                                                                                     j ===
                                                                                     lessonIndex
                                                                                       ? {
-                                                                                          ...l,
+                                                                      ...l, 
                                                                                           content:
                                                                                             e
                                                                                               .target
@@ -987,18 +987,18 @@ const CreateCourse = () => {
                                                                           : m
                                                                     )
                                                                 );
-                                                              }}
-                                                            />
-                                                          </div>
+                                                            }}
+                                                          />
+                                                        </div>
                                                         ) : (
                                                           (lesson.type ===
                                                             "video" ||
                                                             lesson.type ===
                                                               "reading") && (
-                                                            <div className="flex items-center gap-2 mt-2">
-                                                              <Input
-                                                                type="file"
-                                                                className="h-8 text-xs"
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                          <Input
+                                                            type="file"
+                                                            className="h-8 text-xs"
                                                                 accept={
                                                                   lesson.type ===
                                                                   "video"
@@ -1018,29 +1018,29 @@ const CreateCourse = () => {
                                                                       lessonIndex,
                                                                       lesson.type
                                                                     );
-                                                                  }
-                                                                }}
-                                                              />
-                                                              {lesson.fileName && (
-                                                                <div className="text-xs text-gray-500">
+                                                              }
+                                                            }}
+                                                          />
+                                                          {lesson.fileName && (
+                                                            <div className="text-xs text-gray-500">
                                                                   {
                                                                     lesson.fileName
                                                                   }
-                                                                </div>
-                                                              )}
                                                             </div>
+                                                          )}
+                                                        </div>
                                                           )
-                                                        )}
+                                                      )}
 
-                                                        <div className="flex mt-2">
-                                                          <Input
-                                                            type="number"
-                                                            className="h-8 text-xs"
+                                                      <div className="flex mt-2">
+                                                        <Input 
+                                                          type="number"
+                                                          className="h-8 text-xs"
                                                             value={
                                                               lesson.estimatedTime ||
                                                               ""
                                                             }
-                                                            onChange={(e) => {
+                                                          onChange={(e) => {
                                                               const time =
                                                                 parseInt(
                                                                   e.target.value
@@ -1052,7 +1052,7 @@ const CreateCourse = () => {
                                                                       i ===
                                                                       moduleIndex
                                                                         ? {
-                                                                            ...m,
+                                                                ...m, 
                                                                             lessons:
                                                                               m.lessons.map(
                                                                                 (
@@ -1072,19 +1072,19 @@ const CreateCourse = () => {
                                                                         : m
                                                                   )
                                                               );
-                                                            }}
-                                                            placeholder="Time"
-                                                          />
-                                                          <div className="ml-1 px-2 bg-gray-100 rounded flex items-center">
+                                                          }}
+                                                          placeholder="Time"
+                                                        />
+                                                        <div className="ml-1 px-2 bg-gray-100 rounded flex items-center">
                                                             <span className="text-xs">
                                                               min
                                                             </span>
-                                                          </div>
                                                         </div>
                                                       </div>
                                                     </div>
-                                                  )}
-                                                </Draggable>
+                                                  </div>
+                                                )}
+                                              </Draggable>
                                               )
                                             )}
                                             {provided.placeholder}
@@ -1098,7 +1098,7 @@ const CreateCourse = () => {
                                                   prev.map((m, i) =>
                                                     i === moduleIndex
                                                       ? {
-                                                          ...m,
+                                                    ...m, 
                                                           lessons: [
                                                             ...m.lessons,
                                                             {
@@ -1106,10 +1106,10 @@ const CreateCourse = () => {
                                                                 m.lessons
                                                                   .length + 1
                                                               }`,
-                                                              type: "video",
-                                                              content: "",
-                                                              resources: [],
-                                                              estimatedTime: 0,
+                                                      type: "video",
+                                                      content: "",
+                                                      resources: [],
+                                                      estimatedTime: 0,
                                                               completionCriteria:
                                                                 "view",
                                                               requiredScore:
@@ -1144,7 +1144,7 @@ const CreateCourse = () => {
                   )}
                 </Droppable>
               </DragDropContext>
-
+              
               <Button
                 type="button"
                 variant="outline"
@@ -1153,9 +1153,9 @@ const CreateCourse = () => {
                   setModules((prev) => [
                     ...prev,
                     {
-                      title: `Module ${prev.length + 1}`,
-                      description: "",
-                      lessons: [],
+                    title: `Module ${prev.length + 1}`,
+                    description: "",
+                    lessons: [],
                       prerequisites: [],
                     } as Module,
                   ]);
@@ -1166,7 +1166,7 @@ const CreateCourse = () => {
               </Button>
             </CardContent>
           </Card>
-
+          
           <div className="flex justify-end gap-4">
             <Button
               variant="outline"
