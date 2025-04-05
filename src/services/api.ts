@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use the environment variable or a fallback URL
-const API_URL = process.env.BACKEND_API_URL || 'https://educube-navigator.onrender.com/api';
+export const API_URL = process.env.BACKEND_API_URL || 'https://educube-navigator.onrender.com/api';
 
 
 const api = axios.create({
@@ -80,6 +80,12 @@ export const courseService = {
   // Get all courses (different behavior for learners and instructors)
   getCourses: async () => {
     const response = await api.get('/courses');
+    return response.data;
+  },
+
+  // Get a specific course by ID
+  getCourseById: async (courseId: string) => {
+    const response = await api.get(`/courses/${courseId}`);
     return response.data;
   },
 

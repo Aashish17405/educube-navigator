@@ -28,7 +28,7 @@ import {
   Trophy,
   ChevronDown,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Dialog,
@@ -48,7 +48,7 @@ import { formatTime } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VisuallyHidden } from "../components/ui/visually-hidden";
-import { courseService, enrollmentService } from "@/services/api";
+import { courseService, enrollmentService, API_URL } from "@/services/api";
 
 interface Resource {
   _id: string; // MongoDB's _id
@@ -196,34 +196,20 @@ export default function CourseView() {
   const fetchCourse = async () => {
     try {
       setLoading(true);
-      const token = await getToken();
-      const response = await fetch(`${process.env.BACKEND_API_URL}/courses/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch course: ${response.statusText}`);
-      }
+      // Use the getCourseById function to fetch course data
+      const courseData = await courseService.getCourseById(id!);
+      setCourse(courseData);
 
-      const data = await response.json();
-      setCourse(data);
-
-      // If user is logged in, fetch enrollment status
+      // If user is logged in, fetch enrollment status using enrollmentService
       if (user) {
-        const enrollmentResponse = await fetch(
-          `${process.env.BACKEND_API_URL}/enrollments/status/${id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (enrollmentResponse.ok) {
-          const enrollmentData = await enrollmentResponse.json();
+        try {
+          const enrollmentData = await enrollmentService.getEnrollmentStatus(
+            id!
+          );
           setEnrollment(enrollmentData);
+        } catch (error) {
+          console.log("User not enrolled in this course yet");
         }
       }
 
@@ -278,7 +264,7 @@ export default function CourseView() {
   // Helper function to debug API connectivity
   const debugApiConnection = async () => {
     try {
-      const testResponse = await fetch(`${process.env.BACKEND_API_URL}/courses`, {
+      const testResponse = await fetch(`${API_URL}/courses`, {
         method: "GET",
       });
 
@@ -301,9 +287,7 @@ export default function CourseView() {
               "API is returning HTML instead of JSON - you might be hitting a web server"
             );
             setApiState("error");
-            setApiErrorDetails(
-              "The API is returning HTML instead of JSON."
-            );
+            setApiErrorDetails("The API is returning HTML instead of JSON.");
             toast({
               title: "API Configuration Error",
               description:
@@ -344,8 +328,7 @@ export default function CourseView() {
         );
         toast({
           title: "Server Unreachable",
-          description:
-            "Cannot connect to the API server.",
+          description: "Cannot connect to the API server.",
           variant: "destructive",
         });
         setLoading(false);
@@ -376,14 +359,11 @@ export default function CourseView() {
 
         // Try to fetch the course data
         try {
-          const courseRes = await fetch(
-            `${process.env.BACKEND_API_URL}/courses/${id}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
+          const courseRes = await fetch(`${API_URL}/courses/${id}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
           if (!courseRes.ok) {
             const contentType = courseRes.headers.get("content-type");
@@ -426,7 +406,7 @@ export default function CourseView() {
 
           // Now fetch enrollment data
           const enrollmentRes = await fetch(
-            `${process.env.BACKEND_API_URL}/enrollments/status/${id}`,
+            `${API_URL}/enrollments/status/${id}`,
             {
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -538,25 +518,11 @@ export default function CourseView() {
   const handleEnroll = async () => {
     try {
       setIsEnrolling(true);
-      const token = getToken();
-      const response = await fetch(
-        `https://educube-navigator.onrender.com/api/enrollments/${id}/enroll`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to enroll");
-      }
-
-      const enrollmentData = await response.json();
+      // Use the enrollmentService to enroll in course
+      const enrollmentData = await enrollmentService.enrollInCourse(id!);
       setEnrollment(enrollmentData);
+
       toast({
         title: "Enrolled Successfully",
         description: "You are now enrolled in this course",
@@ -1113,49 +1079,6 @@ export default function CourseView() {
       <MainLayout>
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-        </div>
-      </MainLayout>
-    );
-  }
-
-  if (apiState === "error") {
-    return (
-      <MainLayout>
-        <div className="container mx-auto py-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-red-500">
-                API Connection Error
-              </CardTitle>
-              <CardDescription>
-                Unable to connect to the API server properly
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 border border-red-300 bg-red-50 rounded-md">
-                <p className="font-medium">Error Details:</p>
-                <p className="text-sm mt-2">
-                  {apiErrorDetails || "Unknown error"}
-                </p>
-              </div>
-
-              <div className="p-4 border rounded-md">
-                <p className="font-medium">Troubleshooting steps:</p>
-                <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
-                  <li>
-                    Verify the API base URL in your environment configuration
-                  </li>
-                  <li>Look for CORS issues in the browser console</li>
-                </ul>
-              </div>
-
-              <div className="flex justify-end">
-                <Button onClick={() => window.location.reload()}>
-                  Refresh Page
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </MainLayout>
     );
